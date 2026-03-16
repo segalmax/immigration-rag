@@ -76,11 +76,14 @@ def clean_file(text: str) -> tuple[str | None, str]:
     return text, action
 
 
+_BASE = Path(__file__).parent.parent
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", default="uscis_policy_manual")
-    parser.add_argument("--output", default="uscis_policy_manual_clean")
-    parser.add_argument("--log", default="clean_kb.log")
+    parser.add_argument("--input", default=str(_BASE / "data/uscis_policy_manual"))
+    parser.add_argument("--output", default=str(_BASE / "data/uscis_policy_manual_clean"))
+    parser.add_argument("--log", default=str(_BASE / "logs/clean_kb.log"))
     args = parser.parse_args()
 
     input_dir = Path(args.input)

@@ -149,10 +149,13 @@ def parse(input_path: Path, output_dir: Path):
     print(f"\nDone. Wrote {chapters_written} chapter files to {output_dir}/")
 
 
+_BASE = Path(__file__).parent.parent
+
+
 def main():
     parser = argparse.ArgumentParser(description="Parse USCIS Policy Manual HTML into structured .md files")
-    parser.add_argument("--input", default="uscis_policy_manual.html", help="Path to downloaded HTML file")
-    parser.add_argument("--output", default="uscis_policy_manual", help="Output directory")
+    parser.add_argument("--input", default=str(_BASE / "data/raw/uscis_policy_manual.html"), help="Path to downloaded HTML file")
+    parser.add_argument("--output", default=str(_BASE / "data/uscis_policy_manual"), help="Output directory")
     args = parser.parse_args()
 
     input_path = Path(args.input)

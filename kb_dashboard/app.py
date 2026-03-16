@@ -15,8 +15,8 @@ from flask import Flask, render_template, abort
 
 app = Flask(__name__)
 
-RAW_ROOT   = Path(__file__).parent.parent / "uscis_policy_manual"
-CLEAN_ROOT = Path(__file__).parent.parent / "uscis_policy_manual_clean"
+RAW_ROOT   = Path(__file__).parent.parent / "data" / "uscis_policy_manual"
+CLEAN_ROOT = Path(__file__).parent.parent / "data" / "uscis_policy_manual_clean"
 
 # tiktoken encoder — loaded once
 _enc = tiktoken.get_encoding("cl100k_base")

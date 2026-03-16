@@ -13,3 +13,4 @@ uscis_policy_manual.html
 uscis_policy_manual/
 uscis_policy_manual_clean/
 .claude/
+logs/*.log

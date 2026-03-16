@@ -245,10 +245,13 @@ def render_report(data: dict, corpus_dir: Path) -> str:
     return "\n".join(lines)
 
 
+_BASE = Path(__file__).parent.parent
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", default="uscis_policy_manual")
-    parser.add_argument("--output", default="kb_report.md")
+    parser.add_argument("--input", default=str(_BASE / "data/uscis_policy_manual"))
+    parser.add_argument("--output", default=str(_BASE / "reports/kb_report.md"))
     args = parser.parse_args()
 
     corpus_dir = Path(args.input)
