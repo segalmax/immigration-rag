@@ -1,0 +1,15 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.DS_Store
+venv/
+.venv/
+uscis_policy_manual.html
+uscis_policy_manual/
+uscis_policy_manual_clean/
+.claude/

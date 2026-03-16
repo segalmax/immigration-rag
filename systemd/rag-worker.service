@@ -1,0 +1,14 @@
+[Unit]
+Description=USCIS RAG SQS Worker
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/immigration-rag
+EnvironmentFile=/home/ubuntu/immigration-rag/.env
+ExecStart=/home/ubuntu/immigration-rag/venv/bin/python worker.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

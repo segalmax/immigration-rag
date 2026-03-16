@@ -1,0 +1,347 @@
+{% extends "base.html" %}
+{% block title %}Dashboard – USCIS KB{% endblock %}
+
+{% block content %}
+<div class="max-w-screen-xl mx-auto px-6 py-8 space-y-6">
+
+  <!-- ── Heading ── -->
+  <div>
+    <h1 class="text-2xl font-bold text-gray-900">Knowledge Base Dashboard</h1>
+    <p class="text-sm text-gray-500 mt-1">USCIS Policy Manual · local quality check before S3 / OpenSearch upload</p>
+  </div>
+
+  <!-- ── Footnote Gap Alert (only shown when issues exist) ── -->
+  {% if footnote_gap %}
+  <details open class="rounded-xl border border-red-300 bg-red-50 shadow-sm">
+    <summary class="px-5 py-3 cursor-pointer font-semibold text-red-700 flex items-center gap-2 select-none list-none">
+      <span>⚠️ Footnote Cleanup Gap — clean_kb.py missed these formats</span>
+      <span class="ml-auto bg-red-100 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full">{{ footnote_gap|length }} file(s)</span>
+    </summary>
+    <div class="px-5 pb-4 text-sm text-red-800 space-y-2">
+      <p class="mt-1">
+        <code>clean_kb.py</code> strips <code>**[n]**</code> style refs and <code>## Footnotes</code> sections,
+        but misses <code>[^ n]</code> markdown-footnote syntax and bare <code>[n]</code> before punctuation.
+        These files still have residual noise:
+      </p>
+      <table class="w-full text-xs mt-2 border-collapse">
+        <thead><tr class="border-b border-red-200">
+          <th class="text-left py-1 pr-4">File</th>
+          <th class="text-right py-1">Residual refs</th>
+        </tr></thead>
+        <tbody>
+          {% for f in footnote_gap %}
+          <tr class="border-b border-red-100">
+            <td class="py-1 pr-4 font-mono">
+              <a href="/browse/{{ f.path }}" class="hover:underline">{{ f.path }}</a>
+            </td>
+            <td class="py-1 text-right font-bold">{{ f.residual_footnotes }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p class="text-xs text-red-600 mt-1">Action needed: update <code>clean_kb.py</code> to strip these patterns, then re-run cleaning.</p>
+    </div>
+  </details>
+  {% endif %}
+
+  <!-- ── Raw vs Clean Comparison ── -->
+  <details open class="bg-white rounded-xl border border-gray-200 shadow-sm">
+    <summary class="px-5 py-3 cursor-pointer font-semibold text-gray-800 flex items-center gap-2 select-none list-none">
+      <span>📊 Raw vs Clean Corpus Comparison</span>
+    </summary>
+    <div class="px-5 pb-5 overflow-x-auto">
+      <table class="w-full text-sm mt-2">
+        <thead class="text-xs uppercase text-gray-500 border-b border-gray-100">
+          <tr>
+            <th class="py-2 text-left pr-6">Metric</th>
+            <th class="py-2 text-right px-4">Raw</th>
+            <th class="py-2 text-right px-4">Clean</th>
+            <th class="py-2 text-right px-4 text-gray-300">Chunked <span class="normal-case font-normal">(coming soon)</span></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% set rows = [
+            ("Total files",      summary_raw.total,                          summary.total,            "–"),
+            ("Reserved stubs",   summary_raw.stubs,                          summary.stubs,            "–"),
+            ("Clean files",      summary_raw.clean,                          summary.clean,            "–"),
+            ("Total words",      "{:,}".format(summary_raw.total_words),     "{:,}".format(summary.total_words),   "–"),
+            ("Total tokens",     "{:,}".format(summary_raw.total_tokens),    "{:,}".format(summary.total_tokens),  "–"),
+            ("Mean tokens/file", "{:,}".format(summary_raw.mean_tokens),     "{:,}".format(summary.mean_tokens),   "–"),
+            ("Max tokens/file",  "{:,}".format(summary_raw.max_tokens),      "{:,}".format(summary.max_tokens),    "–"),
+            ("Footnote refs",    "{:,}".format(summary_raw.total_footnotes), "{:,}".format(summary.total_footnotes), "–"),
+            ("Oversized files",  summary_raw.oversized_count,                summary.oversized_count,  "–"),
+          ] %}
+          {% for label, raw_val, clean_val, chunk_val in rows %}
+          <tr class="hover:bg-gray-50">
+            <td class="py-2 pr-6 font-medium text-gray-700">{{ label }}</td>
+            <td class="py-2 px-4 text-right text-gray-600">{{ raw_val }}</td>
+            <td class="py-2 px-4 text-right font-semibold text-indigo-700">{{ clean_val }}</td>
+            <td class="py-2 px-4 text-right text-gray-300">{{ chunk_val }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <!-- ── Stat Cards (clean corpus) ── -->
+  <details open class="bg-white rounded-xl border border-gray-200 shadow-sm">
+    <summary class="px-5 py-3 cursor-pointer font-semibold text-gray-800 flex items-center gap-2 select-none list-none">
+      <span>🗂 Clean Corpus Overview</span>
+    </summary>
+    <div class="px-5 pb-5">
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mt-2">
+        {% set cards = [
+          ("Clean Files",    summary.clean,                          "bg-green-50",   "text-green-700",  "✅"),
+          ("Total Words",    "{:,}".format(summary.total_words),     "bg-sky-50",     "text-sky-700",    "📝"),
+          ("Total Tokens",   "{:,}".format(summary.total_tokens),    "bg-violet-50",  "text-violet-700", "🔢"),
+          ("Avg Tokens/File","{:,}".format(summary.mean_tokens),     "bg-indigo-50",  "text-indigo-700", "📊"),
+          ("Max Tokens",     "{:,}".format(summary.max_tokens),      "bg-orange-50",  "text-orange-700", "📏"),
+          ("Oversized",      summary.oversized_count,                "bg-red-50",     "text-red-600",    "⚠️"),
+        ] %}
+        {% for label, val, bg, color, icon in cards %}
+        <div class="rounded-xl border border-gray-200 {{ bg }} p-4 flex flex-col gap-1">
+          <span class="text-xl">{{ icon }}</span>
+          <span class="text-2xl font-bold {{ color }}">{{ val }}</span>
+          <span class="text-xs text-gray-500 font-medium">{{ label }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </details>
+
+  <!-- ── Distribution Charts ── -->
+  <details open class="bg-white rounded-xl border border-gray-200 shadow-sm">
+    <summary class="px-5 py-3 cursor-pointer font-semibold text-gray-800 flex items-center gap-2 select-none list-none">
+      <span>📈 Distributions</span>
+    </summary>
+    <div class="px-5 pb-4 grid grid-cols-1 lg:grid-cols-2 gap-4 mt-2">
+      <div>{{ dist_word_chart | safe }}</div>
+      <div>{{ dist_token_chart | safe }}</div>
+    </div>
+  </details>
+
+  <!-- ── Pivot Table (Tabulator) ── -->
+  <details open class="bg-white rounded-xl border border-gray-200 shadow-sm">
+    <summary class="px-5 py-3 cursor-pointer font-semibold text-gray-800 flex items-center gap-2 select-none list-none">
+      <span>🔍 Chapter Explorer</span>
+      <span class="text-xs text-gray-400 font-normal ml-1">sortable · groupable · clickable</span>
+    </summary>
+    <div class="px-5 pb-5 mt-2">
+      <div class="flex items-center gap-3 mb-3">
+        <label class="text-sm text-gray-600 font-medium">Group by:</label>
+        <select id="group-select"
+                class="text-sm border border-gray-300 rounded-md px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+          <option value="volume">Volume</option>
+          <option value="part">Part</option>
+          <option value="">None</option>
+        </select>
+      </div>
+      <div id="chapter-table"></div>
+    </div>
+  </details>
+
+  <!-- ── Per-Volume Summary Table ── -->
+  <details class="bg-white rounded-xl border border-gray-200 shadow-sm">
+    <summary class="px-5 py-3 cursor-pointer font-semibold text-gray-800 flex items-center gap-2 select-none list-none">
+      <span>📚 Per-Volume Summary</span>
+      <span class="ml-auto text-xs text-gray-400">click column headers to sort</span>
+    </summary>
+    <div class="px-5 pb-4 overflow-x-auto mt-2">
+      <table id="vol-table" class="w-full text-sm sortable-table">
+        <thead class="bg-gray-50 text-gray-600 text-xs uppercase tracking-wide">
+          <tr>
+            <th class="px-4 py-3 text-left cursor-pointer select-none hover:bg-gray-100" data-col="0">Volume ↕</th>
+            <th class="px-4 py-3 text-right cursor-pointer select-none hover:bg-gray-100" data-col="1">Clean ↕</th>
+            <th class="px-4 py-3 text-right cursor-pointer select-none hover:bg-gray-100" data-col="2">Stubs ↕</th>
+            <th class="px-4 py-3 text-right cursor-pointer select-none hover:bg-gray-100" data-col="3">Median W ↕</th>
+            <th class="px-4 py-3 text-right cursor-pointer select-none hover:bg-gray-100" data-col="4">Median Tok ↕</th>
+            <th class="px-4 py-3 text-left cursor-pointer select-none hover:bg-gray-100 min-w-[180px]" data-col="5">Total Words ↕</th>
+            <th class="px-4 py-3 text-right cursor-pointer select-none hover:bg-gray-100" data-col="6">Footnotes ↕</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for row in vol_rows %}
+          <tr class="hover:bg-gray-50">
+            <td class="px-4 py-2 font-medium text-gray-800">{{ row.vol_label }}</td>
+            <td class="px-4 py-2 text-right text-gray-700">{{ row.files }}</td>
+            <td class="px-4 py-2 text-right">
+              {% if row.stubs > 0 %}
+                <span class="bg-red-100 text-red-600 text-xs font-semibold px-2 py-0.5 rounded-full">{{ row.stubs }}</span>
+              {% else %}<span class="text-gray-300">—</span>{% endif %}
+            </td>
+            <td class="px-4 py-2 text-right text-gray-600">{{ "{:,}".format(row.median_words) }}</td>
+            <td class="px-4 py-2 text-right text-gray-600">{{ "{:,}".format(row.median_tokens) }}</td>
+            <td class="px-4 py-2">
+              <div class="flex items-center gap-2">
+                <div class="flex-1 bg-gray-100 rounded-full h-2">
+                  <div class="bg-indigo-400 h-2 rounded-full"
+                       style="width:{{ (row.total_words / max_words * 100) | round(1) }}%"></div>
+                </div>
+                <span class="text-gray-600 text-xs w-20 text-right">{{ "{:,}".format(row.total_words) }}</span>
+              </div>
+            </td>
+            <td class="px-4 py-2 text-right text-gray-500">{{ "{:,}".format(row.footnotes) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <!-- ── Oversized Files ── -->
+  <details open class="bg-white rounded-xl border border-orange-200 shadow-sm">
+    <summary class="px-5 py-3 cursor-pointer font-semibold text-orange-700 flex items-center gap-2 select-none list-none">
+      <span>⚠️ Oversized Files (≥ 8,000 words)</span>
+      <span class="ml-auto bg-orange-100 text-orange-600 text-xs font-bold px-2 py-0.5 rounded-full">{{ oversized|length }}</span>
+    </summary>
+    <div class="px-5 pb-4 overflow-x-auto">
+      <p class="text-xs text-gray-500 mt-2 mb-3">Plan: split at <code>##</code> sections during chunking phase.</p>
+      <table class="w-full text-sm">
+        <thead class="text-xs uppercase text-gray-500 border-b border-gray-100">
+          <tr>
+            <th class="py-2 text-right pr-4">Words</th>
+            <th class="py-2 text-right pr-4">Tokens</th>
+            <th class="py-2 text-right pr-4">§</th>
+            <th class="py-2 text-left">File</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% for f in oversized %}
+          {% set rc = "bg-red-50" if f.words >= 12000 else ("bg-orange-50" if f.words >= 10000 else "bg-yellow-50") %}
+          {% set bc = "bg-red-100 text-red-600" if f.words >= 12000 else ("bg-orange-100 text-orange-600" if f.words >= 10000 else "bg-yellow-100 text-yellow-700") %}
+          <tr class="{{ rc }}">
+            <td class="py-2 pr-4 text-right font-mono">
+              <span class="text-xs px-2 py-0.5 rounded-full {{ bc }}">{{ "{:,}".format(f.words) }}</span>
+            </td>
+            <td class="py-2 pr-4 text-right text-gray-500 text-xs">{{ "{:,}".format(f.tokens) }}</td>
+            <td class="py-2 pr-4 text-right text-gray-400 text-xs">{{ f.sections }}</td>
+            <td class="py-2">
+              <a href="/browse/{{ f.path }}" class="font-mono text-xs text-indigo-600 hover:underline break-all">{{ f.path }}</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <!-- ── Top Footnote Files ── -->
+  <details class="bg-white rounded-xl border border-gray-200 shadow-sm">
+    <summary class="px-5 py-3 cursor-pointer font-semibold text-gray-700 flex items-center gap-2 select-none list-none">
+      <span>📎 Top 10 Files by Footnote Refs (raw corpus)</span>
+      <span class="ml-auto text-xs text-gray-400">{{ "{:,}".format(summary.total_footnotes) }} total · {{ summary.files_w_footnotes }} files</span>
+    </summary>
+    <div class="px-5 pb-4 overflow-x-auto mt-2">
+      {% set max_fn = (top_footnotes[0].footnotes if top_footnotes else 1) %}
+      {% set max_fn = max_fn if max_fn > 0 else 1 %}
+      <table class="w-full text-sm">
+        <thead class="text-xs uppercase text-gray-500 border-b border-gray-100">
+          <tr>
+            <th class="py-2 text-right pr-6">Refs</th>
+            <th class="py-2 text-left w-40">Bar</th>
+            <th class="py-2 text-left">File</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% for f in top_footnotes %}
+          <tr class="hover:bg-gray-50">
+            <td class="py-2 pr-6 text-right font-semibold text-gray-700">{{ f.footnotes }}</td>
+            <td class="py-2 pr-4">
+              <div class="bg-gray-100 rounded-full h-2">
+                <div class="bg-indigo-400 h-2 rounded-full"
+                     style="width:{{ (f.footnotes / max_fn * 100)|round(1) }}%"></div>
+              </div>
+            </td>
+            <td class="py-2">
+              <a href="/browse/{{ f.path }}" class="font-mono text-xs text-indigo-600 hover:underline break-all">{{ f.path }}</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <!-- ── Reserved Stubs ── -->
+  <details class="bg-white rounded-xl border border-gray-200 shadow-sm">
+    <summary class="px-5 py-3 cursor-pointer font-semibold text-gray-600 flex items-center gap-2 select-none list-none">
+      <span>🚫 Reserved Stubs (excluded from clean corpus)</span>
+      <span class="ml-auto bg-gray-100 text-gray-500 text-xs font-bold px-2 py-0.5 rounded-full">{{ stubs_list|length }}</span>
+    </summary>
+    <div class="px-5 pb-4 mt-2">
+      <ul class="space-y-1">
+        {% for f in stubs_list %}
+        <li class="font-mono text-xs text-gray-400">{{ f.path }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </details>
+
+</div>
+
+<!-- ── Tabulator init ── -->
+<script>
+(function () {
+  const rows = {{ chapter_rows_json | safe }};
+
+  const table = new Tabulator("#chapter-table", {
+    data: rows,
+    layout: "fitColumns",
+    height: "520px",
+    groupBy: "volume",
+    groupToggleElement: "header",
+    groupStartOpen: false,
+    initialSort: [{ column: "words", dir: "desc" }],
+    columns: [
+      { title: "Volume",    field: "volume",   visible: false },
+      { title: "Part",      field: "part",     width: 220, headerFilter: "input" },
+      { title: "Chapter",   field: "chapter",  minWidth: 200, headerFilter: "input",
+        formatter: function(cell) {
+          const row = cell.getRow().getData();
+          return `<a href="/browse/${row.path}" class="text-indigo-600 hover:underline">${cell.getValue()}</a>`;
+        },
+        formatterParams: { allowHtml: true }
+      },
+      { title: "Words",     field: "words",    width: 90,  sorter: "number",
+        formatter: function(cell){ return cell.getValue().toLocaleString(); } },
+      { title: "Tokens",    field: "tokens",   width: 90,  sorter: "number",
+        formatter: function(cell){ return cell.getValue().toLocaleString(); } },
+      { title: "Footnotes", field: "footnotes",width: 90,  sorter: "number" },
+      { title: "Sections",  field: "sections", width: 80,  sorter: "number" },
+      { title: "View",      field: "path",     width: 60,  headerSort: false,
+        formatter: function(cell) {
+          return `<a href="/browse/${cell.getValue()}" class="text-indigo-500 hover:underline text-xs">open</a>`;
+        },
+        formatterParams: { allowHtml: true }
+      },
+    ],
+  });
+
+  document.getElementById("group-select").addEventListener("change", function () {
+    table.setGroupBy(this.value);
+  });
+})();
+</script>
+
+<!-- ── Sortable static tables ── -->
+<script>
+document.querySelectorAll("table th[data-col]").forEach(function(th) {
+  th.addEventListener("click", function() {
+    const col   = parseInt(th.dataset.col);
+    const tbody = th.closest("table").querySelector("tbody");
+    const rows  = Array.from(tbody.querySelectorAll("tr"));
+    const asc   = th.dataset.asc !== "1";
+    th.dataset.asc = asc ? "1" : "0";
+    rows.sort(function(a, b) {
+      const av = a.cells[col]?.innerText.replace(/[^0-9.\-]/g,"") || a.cells[col]?.innerText || "";
+      const bv = b.cells[col]?.innerText.replace(/[^0-9.\-]/g,"") || b.cells[col]?.innerText || "";
+      const an = parseFloat(av), bn = parseFloat(bv);
+      if (!isNaN(an) && !isNaN(bn)) return asc ? an - bn : bn - an;
+      return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+    rows.forEach(r => tbody.appendChild(r));
+  });
+});
+</script>
+{% endblock %}
