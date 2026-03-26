@@ -23,6 +23,7 @@ def main():
 
     # /ask
     r = requests.post(f"{base}/ask", json={"question": "What is USCIS?"}, timeout=10)
+    # 501 = "Not Implemented" (acceptable for /ask if backend is stubbed)
     assert r.status_code in (200, 501), f"/ask returned {r.status_code}"
     print(f"✅ /ask OK  (status={r.status_code})")
     print("   response:", r.json())

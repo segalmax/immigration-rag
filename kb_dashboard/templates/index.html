@@ -12,7 +12,7 @@
 
   <!-- ── Footnote Gap Alert (only shown when issues exist) ── -->
   {% if footnote_gap %}
-  <details open class="rounded-xl border border-red-300 bg-red-50 shadow-sm">
+  <details class="rounded-xl border border-red-300 bg-red-50 shadow-sm">
     <summary class="px-5 py-3 cursor-pointer font-semibold text-red-700 flex items-center gap-2 select-none list-none">
       <span>⚠️ Footnote Cleanup Gap — clean_kb.py missed these formats</span>
       <span class="ml-auto bg-red-100 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full">{{ footnote_gap|length }} file(s)</span>
@@ -45,7 +45,7 @@
   {% endif %}
 
   <!-- ── Raw vs Clean Comparison ── -->
-  <details open class="bg-white rounded-xl border border-gray-200 shadow-sm">
+  <details class="bg-white rounded-xl border border-gray-200 shadow-sm">
     <summary class="px-5 py-3 cursor-pointer font-semibold text-gray-800 flex items-center gap-2 select-none list-none">
       <span>📊 Raw vs Clean Corpus Comparison</span>
     </summary>
@@ -61,19 +61,19 @@
         </thead>
         <tbody class="divide-y divide-gray-50">
           {% set rows = [
-            ("Total files",      summary_raw.total,                          summary.total,            "–"),
-            ("Reserved stubs",   summary_raw.stubs,                          summary.stubs,            "–"),
-            ("Clean files",      summary_raw.clean,                          summary.clean,            "–"),
-            ("Total words",      "{:,}".format(summary_raw.total_words),     "{:,}".format(summary.total_words),   "–"),
-            ("Total tokens",     "{:,}".format(summary_raw.total_tokens),    "{:,}".format(summary.total_tokens),  "–"),
-            ("Mean tokens/file", "{:,}".format(summary_raw.mean_tokens),     "{:,}".format(summary.mean_tokens),   "–"),
-            ("Max tokens/file",  "{:,}".format(summary_raw.max_tokens),      "{:,}".format(summary.max_tokens),    "–"),
-            ("Footnote refs",    "{:,}".format(summary_raw.total_footnotes), "{:,}".format(summary.total_footnotes), "–"),
-            ("Oversized files",  summary_raw.oversized_count,                summary.oversized_count,  "–"),
+            ("Total files",      summary_raw.total,                          summary.total,            "–", "All .md files found in the corpus root, including reserved stubs"),
+            ("Reserved stubs",   summary_raw.stubs,                          summary.stubs,            "–", "USCIS placeholder chapters containing only '_No content._' — excluded from indexing"),
+            ("Clean files",      summary_raw.clean,                          summary.clean,            "–", "Files with real content after removing reserved stubs"),
+            ("Total words",      "{:,}".format(summary_raw.total_words),     "{:,}".format(summary.total_words),   "–", "Sum of whitespace-separated word count across all clean files"),
+            ("Total tokens",     "{:,}".format(summary_raw.total_tokens),    "{:,}".format(summary.total_tokens),  "–", "cl100k_base (OpenAI tiktoken) token count — approximation only, Titan tokenizer differs"),
+            ("Mean tokens/file", "{:,}".format(summary_raw.mean_tokens),     "{:,}".format(summary.mean_tokens),   "–", "Average token count per clean file"),
+            ("Max tokens/file",  "{:,}".format(summary_raw.max_tokens),      "{:,}".format(summary.max_tokens),    "–", "Largest single file — needs splitting before indexing if above embedding model limit"),
+            ("Footnote refs",    "{:,}".format(summary_raw.total_footnotes), "{:,}".format(summary.total_footnotes), "–", "**[n]** style footnote markers found. Should be 0 in clean corpus after running clean_kb.py"),
+            ("Oversized files",  summary_raw.oversized_count,                summary.oversized_count,  "–", "Files with ≥ 8,000 words — exceed typical embedding model context windows, need chunking"),
           ] %}
-          {% for label, raw_val, clean_val, chunk_val in rows %}
+          {% for label, raw_val, clean_val, chunk_val, tip in rows %}
           <tr class="hover:bg-gray-50">
-            <td class="py-2 pr-6 font-medium text-gray-700">{{ label }}</td>
+            <td class="py-2 pr-6 font-medium text-gray-700 cursor-help" data-tippy-content="{{ tip }}">{{ label }}</td>
             <td class="py-2 px-4 text-right text-gray-600">{{ raw_val }}</td>
             <td class="py-2 px-4 text-right font-semibold text-indigo-700">{{ clean_val }}</td>
             <td class="py-2 px-4 text-right text-gray-300">{{ chunk_val }}</td>
@@ -85,22 +85,22 @@
   </details>
 
   <!-- ── Stat Cards (clean corpus) ── -->
-  <details open class="bg-white rounded-xl border border-gray-200 shadow-sm">
+  <details class="bg-white rounded-xl border border-gray-200 shadow-sm">
     <summary class="px-5 py-3 cursor-pointer font-semibold text-gray-800 flex items-center gap-2 select-none list-none">
       <span>🗂 Clean Corpus Overview</span>
     </summary>
     <div class="px-5 pb-5">
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mt-2">
         {% set cards = [
-          ("Clean Files",    summary.clean,                          "bg-green-50",   "text-green-700",  "✅"),
-          ("Total Words",    "{:,}".format(summary.total_words),     "bg-sky-50",     "text-sky-700",    "📝"),
-          ("Total Tokens",   "{:,}".format(summary.total_tokens),    "bg-violet-50",  "text-violet-700", "🔢"),
-          ("Avg Tokens/File","{:,}".format(summary.mean_tokens),     "bg-indigo-50",  "text-indigo-700", "📊"),
-          ("Max Tokens",     "{:,}".format(summary.max_tokens),      "bg-orange-50",  "text-orange-700", "📏"),
-          ("Oversized",      summary.oversized_count,                "bg-red-50",     "text-red-600",    "⚠️"),
+          ("Clean Files",    summary.clean,                          "bg-green-50",   "text-green-700",  "✅", "Files with real content after removing reserved stubs"),
+          ("Total Words",    "{:,}".format(summary.total_words),     "bg-sky-50",     "text-sky-700",    "📝", "Sum of all words across clean files"),
+          ("Total Tokens",   "{:,}".format(summary.total_tokens),    "bg-violet-50",  "text-violet-700", "🔢", "cl100k_base token count — approximation, Titan tokenizer differs"),
+          ("Avg Tokens/File","{:,}".format(summary.mean_tokens),     "bg-indigo-50",  "text-indigo-700", "📊", "Mean token count per clean file"),
+          ("Max Tokens",     "{:,}".format(summary.max_tokens),      "bg-orange-50",  "text-orange-700", "📏", "Largest file in the corpus — needs splitting if above embedding model limit"),
+          ("Oversized",      summary.oversized_count,                "bg-red-50",     "text-red-600",    "⚠️", "Files with ≥ 8,000 words — must be split at ## sections before indexing"),
         ] %}
-        {% for label, val, bg, color, icon in cards %}
-        <div class="rounded-xl border border-gray-200 {{ bg }} p-4 flex flex-col gap-1">
+        {% for label, val, bg, color, icon, tip in cards %}
+        <div class="rounded-xl border border-gray-200 {{ bg }} p-4 flex flex-col gap-1 cursor-help" data-tippy-content="{{ tip }}">
           <span class="text-xl">{{ icon }}</span>
           <span class="text-2xl font-bold {{ color }}">{{ val }}</span>
           <span class="text-xs text-gray-500 font-medium">{{ label }}</span>
@@ -111,7 +111,7 @@
   </details>
 
   <!-- ── Distribution Charts ── -->
-  <details open class="bg-white rounded-xl border border-gray-200 shadow-sm">
+  <details class="bg-white rounded-xl border border-gray-200 shadow-sm">
     <summary class="px-5 py-3 cursor-pointer font-semibold text-gray-800 flex items-center gap-2 select-none list-none">
       <span>📈 Distributions</span>
     </summary>
@@ -122,7 +122,7 @@
   </details>
 
   <!-- ── Pivot Table (Tabulator) ── -->
-  <details open class="bg-white rounded-xl border border-gray-200 shadow-sm">
+  <details class="bg-white rounded-xl border border-gray-200 shadow-sm">
     <summary class="px-5 py-3 cursor-pointer font-semibold text-gray-800 flex items-center gap-2 select-none list-none">
       <span>🔍 Chapter Explorer</span>
       <span class="text-xs text-gray-400 font-normal ml-1">sortable · groupable · clickable</span>
@@ -151,13 +151,13 @@
       <table id="vol-table" class="w-full text-sm sortable-table">
         <thead class="bg-gray-50 text-gray-600 text-xs uppercase tracking-wide">
           <tr>
-            <th class="px-4 py-3 text-left cursor-pointer select-none hover:bg-gray-100" data-col="0">Volume ↕</th>
-            <th class="px-4 py-3 text-right cursor-pointer select-none hover:bg-gray-100" data-col="1">Clean ↕</th>
-            <th class="px-4 py-3 text-right cursor-pointer select-none hover:bg-gray-100" data-col="2">Stubs ↕</th>
-            <th class="px-4 py-3 text-right cursor-pointer select-none hover:bg-gray-100" data-col="3">Median W ↕</th>
-            <th class="px-4 py-3 text-right cursor-pointer select-none hover:bg-gray-100" data-col="4">Median Tok ↕</th>
-            <th class="px-4 py-3 text-left cursor-pointer select-none hover:bg-gray-100 min-w-[180px]" data-col="5">Total Words ↕</th>
-            <th class="px-4 py-3 text-right cursor-pointer select-none hover:bg-gray-100" data-col="6">Footnotes ↕</th>
+            <th class="px-4 py-3 text-left cursor-pointer select-none hover:bg-gray-100" data-col="0" data-tippy-content="USCIS Policy Manual volume name">Volume ↕</th>
+            <th class="px-4 py-3 text-right cursor-pointer select-none hover:bg-gray-100" data-col="1" data-tippy-content="Clean files in this volume (stubs excluded)">Clean ↕</th>
+            <th class="px-4 py-3 text-right cursor-pointer select-none hover:bg-gray-100" data-col="2" data-tippy-content="Reserved placeholder chapters with no content">Stubs ↕</th>
+            <th class="px-4 py-3 text-right cursor-pointer select-none hover:bg-gray-100" data-col="3" data-tippy-content="Median word count per file in this volume">Median W ↕</th>
+            <th class="px-4 py-3 text-right cursor-pointer select-none hover:bg-gray-100" data-col="4" data-tippy-content="Median token count per file (cl100k_base approximation)">Median Tok ↕</th>
+            <th class="px-4 py-3 text-left cursor-pointer select-none hover:bg-gray-100 min-w-[180px]" data-col="5" data-tippy-content="Total word count across all clean files in this volume">Total Words ↕</th>
+            <th class="px-4 py-3 text-right cursor-pointer select-none hover:bg-gray-100" data-col="6" data-tippy-content="Total **[n]** footnote refs in raw files of this volume">Footnotes ↕</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
@@ -190,7 +190,7 @@
   </details>
 
   <!-- ── Oversized Files ── -->
-  <details open class="bg-white rounded-xl border border-orange-200 shadow-sm">
+  <details class="bg-white rounded-xl border border-orange-200 shadow-sm">
     <summary class="px-5 py-3 cursor-pointer font-semibold text-orange-700 flex items-center gap-2 select-none list-none">
       <span>⚠️ Oversized Files (≥ 8,000 words)</span>
       <span class="ml-auto bg-orange-100 text-orange-600 text-xs font-bold px-2 py-0.5 rounded-full">{{ oversized|length }}</span>
@@ -295,8 +295,11 @@
     initialSort: [{ column: "words", dir: "desc" }],
     columns: [
       { title: "Volume",    field: "volume",   visible: false },
-      { title: "Part",      field: "part",     width: 220, headerFilter: "input" },
+      { title: "Part",      field: "part",     width: 220, headerFilter: "input",
+        headerTooltip: "Part within a volume (e.g. Part A – Policies and Procedures)" },
       { title: "Chapter",   field: "chapter",  minWidth: 200, headerFilter: "input",
+        headerTooltip: "Chapter name — click to open the file in the browser",
+        tooltip: function(e, cell) { return cell.getRow().getData().path; },
         formatter: function(cell) {
           const row = cell.getRow().getData();
           return `<a href="/browse/${row.path}" class="text-indigo-600 hover:underline">${cell.getValue()}</a>`;
@@ -304,12 +307,17 @@
         formatterParams: { allowHtml: true }
       },
       { title: "Words",     field: "words",    width: 90,  sorter: "number",
+        headerTooltip: "Total word count for this chapter",
         formatter: function(cell){ return cell.getValue().toLocaleString(); } },
       { title: "Tokens",    field: "tokens",   width: 90,  sorter: "number",
+        headerTooltip: "cl100k_base token count — approximation, Titan tokenizer differs",
         formatter: function(cell){ return cell.getValue().toLocaleString(); } },
-      { title: "Footnotes", field: "footnotes",width: 90,  sorter: "number" },
-      { title: "Sections",  field: "sections", width: 80,  sorter: "number" },
+      { title: "Footnotes", field: "footnotes",width: 90,  sorter: "number",
+        headerTooltip: "Count of **[n]** style footnote references in the raw file" },
+      { title: "Sections",  field: "sections", width: 80,  sorter: "number",
+        headerTooltip: "Number of ## level headings (potential split points for chunking)" },
       { title: "View",      field: "path",     width: 60,  headerSort: false,
+        headerTooltip: "Open the file in the Browse view",
         formatter: function(cell) {
           return `<a href="/browse/${cell.getValue()}" class="text-indigo-500 hover:underline text-xs">open</a>`;
         },
@@ -322,6 +330,11 @@
     table.setGroupBy(this.value);
   });
 })();
+</script>
+
+<!-- ── Tooltips ── -->
+<script>
+  tippy('[data-tippy-content]', { trigger: 'click', placement: 'top', hideOnClick: true, maxWidth: 320 });
 </script>
 
 <!-- ── Sortable static tables ── -->

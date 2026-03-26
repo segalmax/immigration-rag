@@ -21,8 +21,9 @@ from pathlib import Path
 
 FOOTNOTE_REF_RE = re.compile(
     r'\*\*\[[\d*]+\]{1,2}\*\*'   # **[n]**, **[1****0****]**, **[8]]** (multi-digit or double-bracket)
-    r'|\[\d+\](?=\s*\||\s*$)'    # bare [n] at end of line or before table cell separator
+    r'|\[\d+\](?=[.,;)\s]|\s*\||\s*$)'  # bare [n] before punctuation, table separator, or end of line
 )
+FOOTNOTE_DEF_RE = re.compile(r'^\[\^\s*\d+\].*$', re.MULTILINE)  # [^ n] footnote definition lines
 BLANK_LINES_RE = re.compile(r'\n{3,}')
 
 
@@ -34,9 +35,12 @@ def is_reserved(text: str) -> bool:
 
 
 def strip_footnote_refs(text: str) -> tuple[str, int]:
-    """Remove **[n]** patterns. Returns (cleaned_text, count_removed)."""
-    matches = FOOTNOTE_REF_RE.findall(text)
-    return FOOTNOTE_REF_RE.sub("", text), len(matches)
+    """Remove **[n]** inline refs and [^ n] footnote definition lines. Returns (cleaned_text, count_removed)."""
+    n1 = len(FOOTNOTE_REF_RE.findall(text))
+    text = FOOTNOTE_REF_RE.sub("", text)
+    n2 = len(FOOTNOTE_DEF_RE.findall(text))
+    text = FOOTNOTE_DEF_RE.sub("", text)
+    return text, n1 + n2
 
 
 def strip_footnotes_section(text: str) -> tuple[str, bool]:

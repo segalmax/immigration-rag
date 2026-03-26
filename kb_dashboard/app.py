@@ -4,6 +4,7 @@ Flask dev dashboard for inspecting the USCIS Policy Manual knowledge base.
 Runs locally only — not the production RAG API (that lives in ../app.py).
 """
 import json
+import os
 import re
 from pathlib import Path
 
@@ -294,4 +295,5 @@ def browse(subpath=None):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5050)
+    port = int(os.getenv("PORT", 5050))
+    app.run(debug=True, port=port)
