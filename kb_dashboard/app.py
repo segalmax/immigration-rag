@@ -12,7 +12,7 @@ import markdown as md_lib
 import pandas as pd
 import plotly.express as px
 import tiktoken
-from flask import Flask, render_template, abort
+from flask import Flask, render_template, abort, request, jsonify
 
 app = Flask(__name__)
 
@@ -267,31 +267,53 @@ def dashboard():
 
 
 @app.route("/browse")
-@app.route("/browse/<path:subpath>")
-def browse(subpath=None):
+def browse():
     d = load_corpus()
     c = d["clean"]
-    selected = rendered = None
-
-    if subpath:
-        full = CLEAN_ROOT / subpath
-        if not full.exists() or not subpath.endswith(".md"):
-            abort(404)
-        rec = next((f for f in c["all_files"] if f["path"] == subpath), None)
-        if rec:
-            selected = rec
-            rendered = md_lib.markdown(rec["text"], extensions=["tables","fenced_code"])
-
     sorted_tree = sorted(c["tree"].items(), key=lambda kv: vol_sort_key(kv[0]))
     return render_template(
         "browse.html",
         tree=sorted_tree,
         pretty_vol=pretty_vol,
-        selected=selected,
-        rendered=rendered,
-        subpath=subpath or "",
         summary=c["summary"],
     )
+
+
+@app.route("/content/<path:subpath>")
+def content(subpath):
+    if not subpath.endswith(".md"):
+        abort(404)
+    c = load_corpus()["clean"]
+    rec = next((f for f in c["all_files"] if f["path"] == subpath), None)
+    if not rec:
+        abort(404)
+    rendered = md_lib.markdown(rec["text"], extensions=["tables", "fenced_code"])
+    return render_template("_content_fragment.html", selected=rec, rendered=rendered, pretty_vol=pretty_vol)
+
+
+@app.route("/search")
+def search():
+    q = request.args.get("q", "").strip().lower()
+    if len(q) < 2:
+        return jsonify([])
+    results = []
+    for rec in load_corpus()["clean"]["all_files"]:
+        text = rec["text"].lower()
+        idx = text.find(q)
+        if idx == -1:
+            continue
+        start   = max(0, idx - 80)
+        end     = min(len(rec["text"]), idx + len(q) + 80)
+        snippet = ("…" if start else "") + rec["text"][start:end] + ("…" if end < len(rec["text"]) else "")
+        results.append({
+            "path":    rec["path"],
+            "volume":  rec["vol_label"],
+            "part":    rec["part"].replace("_", " ").title(),
+            "chapter": rec["chapter"].replace(".md", "").replace("_", " ").title(),
+            "words":   rec["words"],
+            "snippet": snippet,
+        })
+    return jsonify(results[:100])
 
 
 if __name__ == "__main__":

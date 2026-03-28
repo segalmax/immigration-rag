@@ -1,0 +1,40 @@
+<div class="max-w-4xl mx-auto px-8 py-6">
+
+  <!-- Breadcrumb + badges -->
+  <div class="flex flex-wrap items-center gap-2 mb-4">
+    <span class="text-xs text-gray-400">
+      {{ pretty_vol(selected.volume) }}
+      <span class="mx-1">›</span>
+      <span class="capitalize">{{ selected.part.replace("_", " ") }}</span>
+      <span class="mx-1">›</span>
+      <span class="capitalize font-medium text-gray-600">{{ selected.chapter.replace(".md","").replace("_"," ") }}</span>
+    </span>
+    <span class="ml-auto flex items-center gap-2 flex-wrap">
+      <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+        {{ "{:,}".format(selected.words) }} words
+      </span>
+      <span class="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">
+        {{ "{:,}".format(selected.tokens) }} tokens
+      </span>
+      {% if selected.footnotes > 0 %}
+      <span class="text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full">
+        {{ selected.footnotes }} footnote refs
+      </span>
+      {% endif %}
+      {% if selected.stub %}
+      <span class="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full">Reserved</span>
+      {% endif %}
+      {% if selected.words >= 12000 %}
+      <span class="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">⚠ Very Large</span>
+      {% elif selected.words >= 8000 %}
+      <span class="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">⚠ Large</span>
+      {% endif %}
+    </span>
+  </div>
+
+  <!-- Rendered markdown -->
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm px-8 py-6 prose">
+    {{ rendered | safe }}
+  </div>
+
+</div>

@@ -2,13 +2,17 @@
 {% block title %}Browse – USCIS KB{% endblock %}
 
 {% block content %}
+<style>
+  a.chapter-active { background: rgb(224 231 255); color: rgb(67 56 202); font-weight: 600; }
+</style>
+
 <div class="flex h-[calc(100vh-3.5rem)]">
 
   <!-- ── LEFT SIDEBAR: Tree ── -->
   <aside class="w-80 flex-shrink-0 border-r border-gray-200 bg-white overflow-y-auto">
-    <div class="px-4 py-3 border-b border-gray-100 sticky top-0 bg-white z-10 space-y-2">
-      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Volumes / Parts / Chapters</p>
-      <input id="sidebar-search" type="search" placeholder="Filter chapters…"
+    <div class="px-4 py-3 border-b border-gray-100 sticky top-0 bg-white z-10">
+      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Volumes / Parts / Chapters</p>
+      <input id="content-search" type="search" placeholder="Search inside files…"
              class="w-full text-xs border border-gray-200 rounded-md px-2.5 py-1.5 bg-gray-50
                     focus:outline-none focus:ring-2 focus:ring-indigo-300 placeholder-gray-400">
     </div>
@@ -16,7 +20,6 @@
     <nav class="py-2">
       {% for volume, parts in tree %}
 
-        {# Count all files and clean files in this volume #}
         {% set ns = namespace(total=0, stubs=0) %}
         {% for part, files in parts.items() %}
           {% for f in files %}
@@ -25,10 +28,7 @@
           {% endfor %}
         {% endfor %}
 
-        {# Auto-open the volume that contains the selected file #}
-        {% set is_open = selected and selected.volume == volume %}
-
-        <details class="group" {% if is_open %}open{% endif %}>
+        <details class="group">
           <summary class="flex items-center gap-2 px-4 py-2 cursor-pointer hover:bg-gray-50
                           text-sm font-semibold text-gray-700 list-none select-none">
             <span class="text-gray-400 group-open:rotate-90 transition-transform inline-block">▶</span>
@@ -37,8 +37,7 @@
           </summary>
 
           {% for part, files in parts.items() | sort %}
-            {% set p_open = selected and selected.part == part and selected.volume == volume %}
-            <details class="ml-3" {% if p_open %}open{% endif %}>
+            <details class="ml-3">
               <summary class="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-gray-50
                               text-xs font-medium text-gray-600 list-none select-none">
                 <span class="text-gray-300">▶</span>
@@ -47,15 +46,10 @@
 
               <ul class="ml-3 pb-1">
                 {% for f in files | sort(attribute="chapter") %}
-                  {% set is_active = subpath == f.path %}
-                  {% set is_stub_file = f.stub %}
-                  {% set is_big = f.words >= 8000 %}
                   <li>
-                    <a href="/browse/{{ f.path }}"
-                       class="flex items-center gap-1.5 px-3 py-1 text-xs rounded transition
-                              {% if is_active %}
-                                bg-indigo-100 text-indigo-700 font-semibold
-                              {% elif is_stub_file %}
+                    <a href="#" data-path="{{ f.path }}"
+                       class="flex items-center gap-1.5 px-3 py-1 text-xs rounded transition cursor-pointer
+                              {% if f.stub %}
                                 text-gray-400 italic hover:bg-gray-50
                               {% else %}
                                 text-gray-600 hover:bg-gray-50 hover:text-gray-900
@@ -63,9 +57,9 @@
                       <span class="flex-1 truncate capitalize">
                         {{ f.chapter.replace(".md","").replace("_"," ") }}
                       </span>
-                      {% if is_stub_file %}
+                      {% if f.stub %}
                         <span class="text-[10px] bg-gray-100 text-gray-400 px-1 rounded">reserved</span>
-                      {% elif is_big %}
+                      {% elif f.words >= 8000 %}
                         <span class="text-[10px] bg-orange-100 text-orange-500 px-1 rounded">⚠</span>
                       {% endif %}
                     </a>
@@ -84,101 +78,148 @@
   <!-- ── RIGHT PANEL ── -->
   <main class="flex-1 overflow-y-auto bg-gray-50">
 
-    {% if not selected %}
-    <!-- Splash when no file selected -->
-    <div class="flex flex-col items-center justify-center h-full text-center p-10 gap-6">
-      <span class="text-6xl">📂</span>
-      <div>
-        <h2 class="text-xl font-semibold text-gray-700">Select a chapter from the left</h2>
-        <p class="text-sm text-gray-400 mt-1">Browse 12 volumes of USCIS Policy Manual</p>
-      </div>
-      <!-- Mini stat cards -->
-      <div class="flex flex-wrap justify-center gap-4 mt-4">
-        {% set mini = [
-          ("Volumes",  12,                    "bg-indigo-50 text-indigo-700"),
-          ("Clean Files", summary.clean,      "bg-green-50  text-green-700"),
-          ("Stubs",    summary.stubs,         "bg-gray-100  text-gray-500"),
-          ("Total Words", "{:,}".format(summary.total_words), "bg-sky-50 text-sky-700"),
-        ] %}
-        {% for label, val, cls in mini %}
-        <div class="rounded-xl border border-gray-200 {{ cls }} px-5 py-3 text-center">
-          <div class="text-lg font-bold">{{ val }}</div>
-          <div class="text-xs mt-0.5 opacity-70">{{ label }}</div>
+    <!-- Search results (hidden unless active) -->
+    <div id="search-results" class="hidden max-w-4xl mx-auto px-8 py-6 space-y-4">
+      <p id="search-status" class="text-xs text-gray-400"></p>
+      <div id="search-list" class="space-y-3"></div>
+    </div>
+
+    <!-- Content pane: starts as splash, replaced by article on chapter click -->
+    <div id="content-pane">
+      <div class="flex flex-col items-center justify-center h-full text-center p-10 gap-6">
+        <span class="text-6xl">📂</span>
+        <div>
+          <h2 class="text-xl font-semibold text-gray-700">Select a chapter from the left</h2>
+          <p class="text-sm text-gray-400 mt-1">Browse 12 volumes of USCIS Policy Manual</p>
         </div>
-        {% endfor %}
+        <div class="flex flex-wrap justify-center gap-4 mt-4">
+          {% set mini = [
+            ("Volumes",  12,                    "bg-indigo-50 text-indigo-700"),
+            ("Clean Files", summary.clean,      "bg-green-50  text-green-700"),
+            ("Stubs",    summary.stubs,         "bg-gray-100  text-gray-500"),
+            ("Total Words", "{:,}".format(summary.total_words), "bg-sky-50 text-sky-700"),
+          ] %}
+          {% for label, val, cls in mini %}
+          <div class="rounded-xl border border-gray-200 {{ cls }} px-5 py-3 text-center">
+            <div class="text-lg font-bold">{{ val }}</div>
+            <div class="text-xs mt-0.5 opacity-70">{{ label }}</div>
+          </div>
+          {% endfor %}
+        </div>
       </div>
     </div>
-
-    {% else %}
-    <!-- File viewer -->
-    <div class="max-w-4xl mx-auto px-8 py-6">
-
-      <!-- Breadcrumb + badges -->
-      <div class="flex flex-wrap items-center gap-2 mb-4">
-        <span class="text-xs text-gray-400">
-          {{ pretty_vol(selected.volume) }}
-          <span class="mx-1">›</span>
-          <span class="capitalize">{{ selected.part.replace("_", " ") }}</span>
-          <span class="mx-1">›</span>
-          <span class="capitalize font-medium text-gray-600">{{ selected.chapter.replace(".md","").replace("_"," ") }}</span>
-        </span>
-
-        <span class="ml-auto flex items-center gap-2 flex-wrap">
-          <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-            {{ "{:,}".format(selected.words) }} words
-          </span>
-          <span class="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">
-            {{ "{:,}".format(selected.tokens) }} tokens
-          </span>
-          {% if selected.footnotes > 0 %}
-          <span class="text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full">
-            {{ selected.footnotes }} footnote refs
-          </span>
-          {% endif %}
-          {% if selected.stub %}
-          <span class="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full">Reserved</span>
-          {% endif %}
-          {% if selected.words >= 12000 %}
-          <span class="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">⚠ Very Large</span>
-          {% elif selected.words >= 8000 %}
-          <span class="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">⚠ Large</span>
-          {% endif %}
-        </span>
-      </div>
-
-      <!-- Rendered markdown -->
-      <div class="bg-white rounded-xl border border-gray-200 shadow-sm px-8 py-6 prose">
-        {{ rendered | safe }}
-      </div>
-
-    </div>
-    {% endif %}
 
   </main>
 
 </div>
 
 <script>
-document.getElementById('sidebar-search').addEventListener('input', function () {
-  const q = this.value.trim().toLowerCase();
-  document.querySelectorAll('aside nav > details').forEach(function (vol) {
+const contentInput  = document.getElementById('content-search');
+const searchResults = document.getElementById('search-results');
+const searchStatus  = document.getElementById('search-status');
+const searchList    = document.getElementById('search-list');
+const contentPane   = document.getElementById('content-pane');
+
+function setActive(a) {
+  document.querySelectorAll('.chapter-active').forEach(el => el.classList.remove('chapter-active'));
+  a.classList.add('chapter-active');
+}
+
+async function loadContent(path) {
+  searchResults.classList.add('hidden');
+  contentPane.classList.remove('hidden');
+  contentPane.innerHTML = '<div class="flex items-center justify-center h-32 text-gray-400 text-sm">Loading…</div>';
+  const html = await fetch('/content/' + path).then(r => r.text());
+  contentPane.innerHTML = html;
+}
+
+// Sidebar chapter clicks
+document.querySelector('aside nav').addEventListener('click', function(e) {
+  const a = e.target.closest('a[data-path]');
+  if (!a) return;
+  e.preventDefault();
+  loadContent(a.dataset.path);
+  setActive(a);
+});
+
+// Search result card clicks
+searchList.addEventListener('click', function(e) {
+  const a = e.target.closest('a[data-path]');
+  if (!a) return;
+  e.preventDefault();
+  const path = a.dataset.path;
+  loadContent(path);
+  const sidebarLink = document.querySelector(`aside nav a[data-path="${CSS.escape(path)}"]`);
+  if (sidebarLink) setActive(sidebarLink);
+});
+
+function filterSidebar(matchedPaths) {
+  document.querySelectorAll('aside nav > details').forEach(function(vol) {
     let volMatched = 0;
-    vol.querySelectorAll('details').forEach(function (part) {
-      let partHasMatch = false;
-      part.querySelectorAll('li').forEach(function (li) {
-        const show = !q || li.textContent.toLowerCase().includes(q);
+    vol.querySelectorAll('details').forEach(function(part) {
+      let partMatched = 0;
+      part.querySelectorAll('li').forEach(function(li) {
+        const path = li.querySelector('a[data-path]')?.dataset.path || '';
+        const show = !matchedPaths || matchedPaths.has(path);
         li.style.display = show ? '' : 'none';
-        if (show) { partHasMatch = true; volMatched++; }
+        if (show) { partMatched++; volMatched++; }
       });
-      part.style.display = partHasMatch ? '' : 'none';
-      if (partHasMatch) part.open = !!q;
+      part.style.display = (!matchedPaths || partMatched) ? '' : 'none';
+      if (matchedPaths && partMatched) part.open = true;
     });
-    vol.style.display = volMatched || !q ? '' : 'none';
-    if (volMatched && q) vol.open = true;
+    vol.style.display = (!matchedPaths || volMatched) ? '' : 'none';
+    if (matchedPaths && volMatched) vol.open = true;
     const matchedSpan = vol.querySelector('.vol-matched');
     const total = parseInt(vol.querySelector('.vol-count')?.dataset.total || 0);
-    if (matchedSpan) matchedSpan.textContent = q ? volMatched : total;
+    if (matchedSpan) matchedSpan.textContent = matchedPaths ? volMatched : total;
   });
+}
+
+function highlight(text, q) {
+  const safe = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return text.replace(new RegExp(safe, 'gi'), m => `<mark class="bg-yellow-200 rounded px-0.5">${m}</mark>`);
+}
+
+function runSearch(q) {
+  if (q.length < 2) {
+    searchResults.classList.add('hidden');
+    contentPane.classList.remove('hidden');
+    searchStatus.textContent = '';
+    searchList.innerHTML = '';
+    filterSidebar(null);
+    return;
+  }
+  searchStatus.textContent = 'Searching…';
+  searchResults.classList.remove('hidden');
+  contentPane.classList.add('hidden');
+  searchList.innerHTML = '';
+  fetch('/search?q=' + encodeURIComponent(q))
+    .then(r => r.json())
+    .then(function(results) {
+      filterSidebar(new Set(results.map(r => r.path)));
+      if (results.length === 0) {
+        searchStatus.textContent = 'No matches.';
+        return;
+      }
+      searchStatus.textContent = results.length + ' file(s) match' + (results.length === 100 ? ' (capped at 100)' : '');
+      searchList.innerHTML = results.map(function(r) {
+        return `<div class="bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-3 space-y-1">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs text-gray-400">${r.volume} › ${r.part}</span>
+            <a href="#" data-path="${r.path}" class="text-xs text-indigo-500 hover:underline flex-shrink-0">open →</a>
+          </div>
+          <a href="#" data-path="${r.path}" class="text-sm font-semibold text-indigo-700 hover:underline block">${r.chapter}</a>
+          <p class="text-xs text-gray-500 font-mono leading-relaxed">${highlight(r.snippet, q)}</p>
+        </div>`;
+      }).join('');
+    });
+}
+
+let debounceTimer;
+contentInput.addEventListener('input', function() {
+  clearTimeout(debounceTimer);
+  const q = this.value.trim();
+  debounceTimer = setTimeout(() => runSearch(q), 300);
 });
 </script>
 {% endblock %}
