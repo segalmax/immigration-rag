@@ -17,7 +17,7 @@ sequenceDiagram
     S3-->>F: presigned URL + key
     F-->>C: {bucket, key, url}
 
-    C->>S3: PUT <presigned_url> (file bytes)
+    C->>S3: PUT presigned_url (file bytes)
     S3-->>C: 200 OK
 
     S3->>SQS: upload event {bucket, key}
@@ -27,7 +27,7 @@ sequenceDiagram
         SQS-->>W: message {bucket, key}
     end
 
-    W->>S3: download file (get .md document)
+    W->>S3: download file (.md document)
     S3-->>W: file content
 
     W->>W: chunk text (fixed-size)
@@ -47,16 +47,16 @@ All files are read eagerly on first request and held in a module-level `_cache` 
 
 ```mermaid
 sequenceDiagram
-    participant C as Client (Browser)
+    participant C as Browser
     participant F as Flask App
-    participant Cache as _cache (process memory)
+    participant Cache as _cache
     participant D as Local Disk
 
-    Note over F,Cache: First request only — subsequent requests skip disk entirely
-    F->>D: rglob("*.md") on raw + clean roots
+    Note over F,Cache: First request only — subsequent requests skip disk
+    F->>D: rglob(*.md) on raw + clean roots
     D-->>F: 494 raw + 446 clean files (paths + full text)
-    F->>F: compute words / tokens (tiktoken) / footnotes per file
-    F->>F: build volume→part→chapter tree, Plotly charts, Tabulator JSON
+    F->>F: compute words, tokens, footnotes per file
+    F->>F: build volume->part->chapter tree, charts, Tabulator JSON
     F->>Cache: store everything in _cache dict
 
     Note over F,Cache: All subsequent requests — cache hit, no disk I/O
@@ -64,33 +64,33 @@ sequenceDiagram
     F->>Cache: load_corpus() hit
     Cache-->>F: chapter_rows[], charts, summary stats
     F-->>C: html (stat cards + Plotly charts + Tabulator JSON baked in)
-    Note over C: Tabulator renders 446 rows; headerFilter on Part/Chapter = name filter (JS only)
+    Note over C: Tabulator renders 446 rows, headerFilter on Part/Chapter columns (JS only)
 
     C->>F: GET /browse
     F->>Cache: load_corpus() hit
-    Cache-->>F: volume→part→chapter tree
-    F-->>C: html (full sidebar tree baked in — single URL, never changes)
+    Cache-->>F: volume->part->chapter tree
+    F-->>C: html (full sidebar tree baked in, single URL never changes)
 
     Note over C: User clicks a chapter in the sidebar
-    C->>F: GET /content/<volume>/<part>/<chapter>.md
+    C->>F: GET /content/volume/part/chapter.md
     F->>Cache: look up file record by path
     Cache-->>F: file record {text, words, tokens, footnotes}
-    F->>F: render markdown → HTML fragment (_content_fragment.html)
+    F->>F: render markdown to HTML fragment
     F-->>C: html fragment (breadcrumb + badges + rendered markdown)
-    Note over C: JS injects fragment into right pane — sidebar unchanged, no reload
+    Note over C: JS injects fragment into right pane, sidebar unchanged, no reload
 
     Note over C: User types in search box (debounced 300ms)
     C->>F: GET /search?q=asylum
     F->>Cache: scan all_files[] for substring match
-    Cache-->>F: [{path, volume, part, chapter, snippet}] (capped at 100)
+    Cache-->>F: results [{path, volume, part, chapter, snippet}] capped at 100
     F-->>C: JSON results
     Note over C: JS filters sidebar to matching chapters only
-    Note over C: JS renders result cards with highlighted snippets in right pane
+    Note over C: JS renders result cards with highlighted snippets
 
     Note over C: User clicks a result card
-    C->>F: GET /content/<path>
+    C->>F: GET /content/path
     F-->>C: html fragment
-    Note over C: JS injects fragment — sidebar filter stays active
+    Note over C: JS injects fragment, sidebar filter stays active
 ```
 
 ## 2b. Dashboard Browsing — S3 Production (future)
@@ -99,34 +99,34 @@ Eager full-corpus scan is not viable against S3 (too slow, no tiktoken). Instead
 
 ```mermaid
 sequenceDiagram
-    participant C as Client (Browser)
+    participant C as Browser
     participant F as Flask App
     participant S3 as S3
     participant OS as OpenSearch
 
     C->>F: GET /browse
-    F->>S3: ListObjectsV2 (prefix=uscis_policy_manual_clean/)
+    F->>S3: ListObjectsV2 prefix=uscis_policy_manual_clean/
     S3-->>F: all .md keys + sizes
-    F->>F: group keys into volume→part→chapter tree
+    F->>F: group keys into volume->part->chapter tree
     F-->>C: html (full tree baked in + filter JS)
 
-    Note over C: Chapter name filter — JS filters <li> elements client-side, no server call
+    Note over C: Chapter name filter, JS filters li elements client-side
 
-    C->>F: GET /content/<volume>/<part>/<chapter>.md
+    C->>F: GET /content/volume/part/chapter.md
     F->>S3: GetObject (key) — file content
-    F->>OS: term query {s3_key} → word count, token count, chunk count, indexed_at
+    F->>OS: term query on s3_key, returns word count, token count, chunk count
     S3-->>F: .md content
     OS-->>F: file metadata
     F->>F: render markdown + merge metadata
-    F-->>C: html fragment (rendered doc + badges: words, tokens, chunks, indexed)
-    Note over C: JS injects fragment into right pane — same SPA pattern as local
+    F-->>C: html fragment (rendered doc + badges)
+    Note over C: JS injects fragment, same SPA pattern as local
 
-    Note over C: User wants full-text search across all files
-    C->>F: GET /search?q=asylum+application
-    F->>OS: match query on text field → ranked {s3_key, snippet, score}[]
-    OS-->>F: search results
+    Note over C: User searches across all files
+    C->>F: GET /search?q=asylum
+    F->>OS: match query on text field, ranked results
+    OS-->>F: [{s3_key, snippet, score}]
     F-->>C: JSON results
-    Note over C: JS filters sidebar + renders result cards (same as local)
+    Note over C: JS filters sidebar + renders result cards
 ```
 
 ## 3. Ask (Question Answering)
@@ -137,9 +137,9 @@ sequenceDiagram
     participant F as Flask App
     participant T as Titan Embedder
     participant OS as OpenSearch
-    participant CL as Claude (Bedrock)
+    participant CL as Claude on Bedrock
 
-    C->>F: POST /v1/ask {question: "how to immigrate"}
+    C->>F: POST /v1/ask {question}
 
     F->>T: embed question
     T-->>F: question vector
@@ -150,5 +150,5 @@ sequenceDiagram
     F->>CL: prompt (question + chunks as context)
     CL-->>F: answer text
 
-    F-->>C: {answer: "...", sources: ["link1", "link2"]}
+    F-->>C: {answer, sources}
 ```
