@@ -221,5 +221,57 @@ contentInput.addEventListener('input', function() {
   const q = this.value.trim();
   debounceTimer = setTimeout(() => runSearch(q), 300);
 });
+
+// ── URL sync ──────────────────────────────────────────────────────────────────
+
+function pushURL(params) {
+  const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+  history.pushState(params || {}, '', '/browse' + qs);
+}
+
+// Patch loadContent and runSearch to write the URL
+const _loadContent = loadContent;
+loadContent = function(path) {
+  pushURL({ path });
+  return _loadContent(path);
+};
+
+const _runSearch = runSearch;
+runSearch = function(q) {
+  if (q.length >= 2) pushURL({ search: q });
+  else history.replaceState({}, '', '/browse');
+  return _runSearch(q);
+};
+
+// Restore state from URL on load
+(function restoreFromURL() {
+  const p = new URLSearchParams(location.search);
+  if (p.has('path')) {
+    const path = p.get('path');
+    _loadContent(path);
+    const a = document.querySelector(`aside nav a[data-path="${CSS.escape(path)}"]`);
+    if (a) setActive(a);
+  } else if (p.has('search')) {
+    const q = p.get('search');
+    contentInput.value = q;
+    _runSearch(q);
+  }
+})();
+
+// Browser back/forward
+window.addEventListener('popstate', function(e) {
+  const st = e.state || {};
+  if (st.path) {
+    _loadContent(st.path);
+    const a = document.querySelector(`aside nav a[data-path="${CSS.escape(st.path)}"]`);
+    if (a) setActive(a);
+  } else if (st.search) {
+    contentInput.value = st.search;
+    _runSearch(st.search);
+  } else {
+    contentInput.value = '';
+    _runSearch('');
+  }
+});
 </script>
 {% endblock %}
