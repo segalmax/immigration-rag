@@ -9,19 +9,6 @@ Manage OpenSearch Serverless collections: provision, backup, restore, teardown.
     --restore --col immig-col3 # restore docs to existing collection
 
 Lifecycle diagram: opensearch/lifecycle.md
-
-flowchart TD
-    A([Start of day]) --> B["--up --col immig-col3"]
-    B --> B1["creates collection + policies<br/>waits ~5 min for ACTIVE<br/>creates kb_index"]
-    B1 --> C{backup file<br/>exists?}
-    C -- yes --> D["bulk re-indexes docs<br/>from opensearch/data/opensearch_dump_immig-col3.jsonl"]
-    C -- no --> E
-    D --> E([Work / ingest / query])
-    E --> F([End of day])
-    F --> G["--down --all"]
-    G --> G1["scrolls all docs to dump file<br/>deletes collection"]
-    G1 --> H[(opensearch/data/ — gitignored)]
-    H --> A
 """
 import argparse
 import json
