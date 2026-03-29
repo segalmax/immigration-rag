@@ -15,3 +15,4 @@ uscis_policy_manual_clean/
 .claude/
 logs/
 scratch.txt
+opensearch/data/
