@@ -1,57 +1,48 @@
 """
 scripts/create_index.py
-One-time script to create the OpenSearch k-NN index with the correct mapping.
-Run once before indexing any documents.
+One-time setup: create the k-NN index in OpenSearch Serverless.
+Mapping and settings are loaded from opensearch/data/opensearch_config_immig-col3.json
+(single source of truth shared with opensearch_export.py).
 
 Usage:
     python scripts/create_index.py
-
-TODO: set VECTOR_DIM to match your Titan Embeddings model output dimension (1536 for v1).
 """
+import json
 import os
-from dotenv import load_dotenv
-load_dotenv()
+import pathlib
+import dotenv
+import boto3
+import requests
+import requests_aws4auth
 
-from opensearch_utils import _get_client
+dotenv.load_dotenv()
 
-OS_INDEX   = os.getenv("OS_INDEX", "uscis-policy")
-VECTOR_DIM = 1536   # Titan Embeddings v1
+OS_ENDPOINT = f"https://{os.environ['OS_HOST']}"
+OS_INDEX    = os.environ["OS_INDEX"]
+REGION      = os.environ["AWS_REGION"]
+
+CONFIG_FILE = pathlib.Path(__file__).parent.parent / "opensearch" / "index_schema.json"
+
+
+def _auth() -> requests_aws4auth.AWS4Auth:
+    creds = boto3.Session().get_credentials().get_frozen_credentials()
+    return requests_aws4auth.AWS4Auth(creds.access_key, creds.secret_key, REGION, "aoss", session_token=creds.token)
 
 
 def create_index() -> None:
-    client = _get_client()
-
-    if client.indices.exists(index=OS_INDEX):
+    config = json.loads(CONFIG_FILE.read_text())
+    resp = requests.put(
+        f"{OS_ENDPOINT}/{OS_INDEX}",
+        auth=_auth(),
+        json={"mappings": config["mapping"], "settings": {"index": config["settings"]}},
+        headers={"Content-Type": "application/json"},
+        timeout=30,
+    )
+    if resp.status_code == 400 and "resource_already_exists_exception" in resp.text:
         print(f"Index '{OS_INDEX}' already exists — skipping.")
         return
-
-    mapping = {
-        "settings": {
-            "index": {
-                "knn": True,
-                "knn.algo_param.ef_search": 100,
-            }
-        },
-        "mappings": {
-            "properties": {
-                "vector": {
-                    "type": "knn_vector",
-                    "dimension": VECTOR_DIM,
-                    "method": {
-                        "name": "hnsw",
-                        "space_type": "cosinesimil",
-                        "engine": "nmslib",
-                    },
-                },
-                "text":    {"type": "text"},
-                "source":  {"type": "keyword"},
-                "section": {"type": "keyword"},
-            }
-        },
-    }
-
-    client.indices.create(index=OS_INDEX, body=mapping)
-    print(f"Index '{OS_INDEX}' created with dim={VECTOR_DIM}.")
+    resp.raise_for_status()
+    print(f"Index '{OS_INDEX}' created at {OS_ENDPOINT}.")
 
 
 if __name__ == "__main__":

@@ -15,18 +15,20 @@ import json
 import os
 import sys
 import time
+import dotenv
 import boto3
 import requests
-from requests_aws4auth import AWS4Auth
+import requests_aws4auth
+
+dotenv.load_dotenv()
 
 REGION       = "eu-central-1"
-INDEX        = "kb_index"
+INDEX        = os.environ["OS_INDEX"]
 SCROLL_SIZE  = 500
 BULK_SIZE    = 500
 HERE         = os.path.dirname(__file__)
 DATA_DIR     = os.path.join(HERE, "data")
-def _config_file(col_name: str) -> str:
-    return os.path.join(DATA_DIR, f"opensearch_config_{col_name}.json")
+SCHEMA_FILE  = os.path.join(HERE, "index_schema.json")
 
 COLLECTIONS = ["immig-col3"]
 
@@ -89,10 +91,10 @@ def _resolve(col_name: str) -> tuple[str, str]:
     return col_id, f"https://{col_id}.{REGION}.aoss.amazonaws.com"
 
 
-def _auth() -> AWS4Auth:
+def _auth() -> requests_aws4auth.AWS4Auth:
     session = boto3.Session(profile_name="kb_user")
     creds = session.get_credentials().get_frozen_credentials()
-    return AWS4Auth(creds.access_key, creds.secret_key, REGION, "aoss", session_token=creds.token)
+    return requests_aws4auth.AWS4Auth(creds.access_key, creds.secret_key, REGION, "aoss", session_token=creds.token)
 
 
 def _req(method: str, endpoint: str, path: str, body: dict = None) -> dict:
@@ -119,7 +121,7 @@ def up(col_name: str, skip_restore: bool = False):
         except client.exceptions.ConflictException:
             print(f"  exists, skipping: {kwargs['name']}")
 
-    cf = _config_file(col_name)
+    cf = SCHEMA_FILE
     if os.path.exists(cf):
         saved = json.load(open(cf))
         enc_policy = json.dumps(saved["encryption_policy"]["policy"])
@@ -153,8 +155,8 @@ def up(col_name: str, skip_restore: bool = False):
     print("Waiting 20s for policies to propagate...")
     time.sleep(20)
 
-    cf = _config_file(col_name)
-    assert os.path.exists(cf), f"No config snapshot at {cf}. Run --down on a live collection first."
+    cf = SCHEMA_FILE
+    assert os.path.exists(cf), f"No schema at {cf}. Run --down on a live collection first."
     config = json.load(open(cf))
     print(f"Creating index {INDEX} (from {cf})...")
     try:
@@ -196,9 +198,9 @@ def export_config(col_name: str):
         "access_policy":     {"name": acc["name"], "policy": acc["policy"]},
     }
     os.makedirs(DATA_DIR, exist_ok=True)
-    with open(_config_file(col_name), "w") as f:
+    with open(SCHEMA_FILE, "w") as f:
         json.dump(config, f, indent=2, default=str)
-    print(f"✓ [{col_name}] config exported → {_config_file(col_name)}")
+    print(f"✓ [{col_name}] config exported → {SCHEMA_FILE}")
 
 
 def backup(col_name: str):
