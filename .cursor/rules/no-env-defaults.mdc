@@ -1,0 +1,35 @@
+---
+description: Forbid default values in environment variable lookups — fail fast if config is missing
+globs: **/*.py
+alwaysApply: false
+---
+
+# No Defaults for Environment Variables
+
+**Never** pass a default to `os.environ.get()` or `os.getenv()`. Defaults silently hide missing config and cause confusing runtime bugs.
+
+```python
+# ❌ BAD — hides missing env var, app runs with wrong value
+S3_BUCKET = os.environ.get("S3_BUCKET", "my-default-bucket")
+PORT      = os.getenv("PORT", 5000)
+
+# ✅ GOOD — crashes immediately with a clear KeyError if not set
+S3_BUCKET = os.environ["S3_BUCKET"]
+PORT      = int(os.environ["PORT"])
+```
+
+**If the value is truly optional** (None is valid), handle it explicitly:
+
+```python
+# ✅ GOOD — intent is clear, None is handled
+LOG_LEVEL = os.environ.get("LOG_LEVEL")  # no default
+if LOG_LEVEL:
+    configure_logging(LOG_LEVEL)
+```
+
+**If it's a project constant**, don't make it an env var at all:
+
+```python
+# ✅ GOOD — not configurable per deployment, just a constant
+S3_CLEAN_PREFIX = "uscis_policy_manual_clean/"
+```

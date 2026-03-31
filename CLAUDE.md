@@ -4,6 +4,7 @@
 
 ## Shorthand
 - **wtrw** = "what's the right word/phrase?" — give the industry-standard term, don't just use the user's word.
+- **amq** = "ask me all the right questions" — before planning/implementing, ask every question needed to avoid wrong assumptions, and to prevent bad practices.
 
 ## Behavior
 - Push back, ask questions, object when something is wrong. Senior dev colleague, not yes-man.
@@ -53,6 +54,11 @@
 - **Goal:** RAG app — USCIS Policy Manual → S3 → SQS → EC2 worker → OpenSearch (k-NN) → Claude via Bedrock.
 - **Corpus:** `uscis_policy_manual/` (raw 494) · `uscis_policy_manual_clean/` (clean 446).
 - `kb_dashboard/` = local dev tool only, not the production API.
+- **Two upload tracks:** USCIS (category=uscis, S3 key from H1/H2 headers, rich metadata) · Other (category=other, flat `uploads/` prefix, minimal metadata).
+- **SQS trigger:** client calls `POST /v1/uploads/notify` after S3 PUT — not an S3 event notification.
+- **Chunking:** `MarkdownHeaderTextSplitter` first (section_path metadata per chunk) → `RecursiveCharacterTextSplitter` only for chunks >2000 chars.
+- **OpenSearch chunk fields:** `s3_key`, `category`, `volume`, `part`, `chapter`, `source_url`, `section_path[]`, `text`, `chunk_index`, `vector`.
+- **S3 CORS:** must `put_bucket_cors` (AllowedMethods: PUT/GET/HEAD, AllowedOrigins: *) before browser presigned-URL uploads work.
 
 ---
 
@@ -60,3 +66,4 @@
 - **Footnote gap:** `clean_kb.py` misses `[^ n]` / bare `[n]` — 4 files still noisy. Awaiting fix instruction.
 - **Token counts approximate:** `tiktoken cl100k_base` ≠ Titan tokenizer. Good enough proxy for now.
 - **Hardcoded paths** in `kb_dashboard/app.py` — must switch to env vars before EC2 deploy.
+- **OpenSearch index** needs recreating with new schema before first worker run (`python scripts/create_index.py`).

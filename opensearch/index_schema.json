@@ -14,6 +14,13 @@
       "source_s3_key": {
         "type": "text"
       },
+      "s3_key": { "type": "keyword" },
+      "category": { "type": "keyword" },
+      "volume": { "type": "keyword" },
+      "part": { "type": "keyword" },
+      "chapter": { "type": "keyword" },
+      "source_url": { "type": "keyword" },
+      "section_path": { "type": "keyword" },
       "text": {
         "type": "text"
       },

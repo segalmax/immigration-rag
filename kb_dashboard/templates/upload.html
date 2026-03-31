@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+{% block title %}Upload – USCIS KB{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto px-6 py-10 space-y-8">
+
+  <div>
+    <h1 class="text-2xl font-bold text-gray-900">Upload Document</h1>
+    <p class="text-sm text-gray-500 mt-1">Upload a clean .md file → S3 → SQS → Worker → OpenSearch</p>
+  </div>
+
+  <!-- Upload card -->
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+
+    <!-- Category selector -->
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Document type</label>
+      <select id="category-select"
+              class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+        <option value="other">Other — arbitrary document</option>
+        <option value="uscis">USCIS — structured policy manual chapter</option>
+      </select>
+    </div>
+
+    <!-- Drop zone -->
+    <div id="drop-zone"
+         class="border-2 border-dashed border-gray-200 rounded-xl p-10 text-center cursor-pointer
+                hover:border-indigo-300 transition-colors">
+      <p class="text-5xl mb-3">📤</p>
+      <p class="text-gray-600 font-medium">Click to select a file</p>
+      <p class="text-xs text-gray-400 mt-1">Markdown files only (.md)</p>
+      <input id="file-input" type="file" accept=".md" class="hidden">
+    </div>
+
+    <!-- USCIS header preview (shown only for USCIS category + file selected) -->
+    <div id="uscis-preview" class="hidden rounded-lg bg-indigo-50 border border-indigo-100 p-4 space-y-1 text-sm">
+      <p class="font-semibold text-indigo-700 text-xs uppercase tracking-wide mb-2">Detected USCIS Taxonomy</p>
+      <p><span class="text-gray-500 w-16 inline-block">Volume</span> <span id="preview-h1" class="font-medium text-gray-800">—</span></p>
+      <p><span class="text-gray-500 w-16 inline-block">Part</span>   <span id="preview-h2" class="font-medium text-gray-800">—</span></p>
+      <p><span class="text-gray-500 w-16 inline-block">Chapter</span><span id="preview-h3" class="font-medium text-gray-800">—</span></p>
+      <p class="text-xs text-indigo-400 mt-1" id="preview-s3-key"></p>
+    </div>
+
+    <div id="upload-status" class="hidden rounded-lg px-4 py-2.5 text-sm"></div>
+
+    <button id="upload-btn"
+            class="w-full bg-indigo-600 text-white rounded-lg py-2.5 font-medium text-sm
+                   hover:bg-indigo-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled>
+      Upload to S3
+    </button>
+
+  </div>
+
+  <!-- Uploaded files list -->
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm">
+    <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+      <span class="font-semibold text-sm text-gray-700">Recent Uploads</span>
+      <button id="refresh-btn" class="text-xs text-indigo-500 hover:underline">↻ refresh</button>
+    </div>
+    <div id="file-list" class="divide-y divide-gray-50 min-h-[60px]">
+      <p class="px-5 py-4 text-sm text-gray-400 italic">Loading…</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const fileInput      = document.getElementById('file-input');
+const dropZone       = document.getElementById('drop-zone');
+const uploadBtn      = document.getElementById('upload-btn');
+const statusEl       = document.getElementById('upload-status');
+const fileListEl     = document.getElementById('file-list');
+const categorySelect = document.getElementById('category-select');
+const uscisPreview   = document.getElementById('uscis-preview');
+
+let selectedFile = null;
+let parsedHeaders = { h1: '', h2: '', h3: '' };
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('border-indigo-400'); });
+dropZone.addEventListener('dragleave',  () => dropZone.classList.remove('border-indigo-400'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('border-indigo-400');
+  const f = e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+categorySelect.addEventListener('change', () => { if (selectedFile) updatePreview(); });
+
+function handleFile(file) {
+  selectedFile = file;
+  dropZone.innerHTML = `
+    <p class="text-5xl mb-3">📄</p>
+    <p class="font-semibold text-gray-800">${file.name}</p>
+    <p class="text-xs text-gray-400 mt-1">${(file.size / 1024).toFixed(1)} KB · ready to upload</p>
+    <input id="file-input" type="file" accept=".md" class="hidden">`;
+  document.getElementById('file-input').addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+  const reader = new FileReader();
+  reader.onload = e => { parseHeaders(e.target.result); updatePreview(); };
+  reader.readAsText(file);
+  uploadBtn.disabled = false;
+}
+
+function parseHeaders(text) {
+  parsedHeaders = { h1: '', h2: '', h3: '' };
+  for (const line of text.split('\n')) {
+    if (line.startsWith('# ')  && !parsedHeaders.h1) parsedHeaders.h1 = line.slice(2).trim();
+    else if (line.startsWith('## ') && !parsedHeaders.h2) parsedHeaders.h2 = line.slice(3).trim();
+    else if (line.startsWith('### ') && !parsedHeaders.h3) parsedHeaders.h3 = line.slice(4).trim();
+    if (parsedHeaders.h1 && parsedHeaders.h2 && parsedHeaders.h3) break;
+  }
+}
+
+function slugify(text) {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+}
+
+function updatePreview() {
+  if (categorySelect.value !== 'uscis') { uscisPreview.classList.add('hidden'); return; }
+  document.getElementById('preview-h1').textContent = parsedHeaders.h1 || '(not found)';
+  document.getElementById('preview-h2').textContent = parsedHeaders.h2 || '(not found)';
+  document.getElementById('preview-h3').textContent = parsedHeaders.h3 || '(not found)';
+  const key = parsedHeaders.h1 && parsedHeaders.h2
+    ? `uscis_policy_manual_clean/${slugify(parsedHeaders.h1)}/${slugify(parsedHeaders.h2)}/${selectedFile.name}`
+    : `uploads/${selectedFile.name}`;
+  document.getElementById('preview-s3-key').textContent = `S3 key: ${key}`;
+  uscisPreview.classList.remove('hidden');
+}
+
+uploadBtn.addEventListener('click', async () => {
+  if (!selectedFile) return;
+  uploadBtn.disabled = true;
+  showStatus('info', 'Getting presigned URL…');
+
+  const body = {
+    filename: selectedFile.name,
+    category: categorySelect.value,
+    h1: parsedHeaders.h1,
+    h2: parsedHeaders.h2,
+    h3: parsedHeaders.h3,
+  };
+
+  const presignRes = await fetch('/v1/uploads/presign', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!presignRes.ok) { showStatus('error', `Presign failed: ${presignRes.status}`); uploadBtn.disabled = false; return; }
+  const { url, key } = await presignRes.json();
+
+  showStatus('info', 'Uploading to S3…');
+  const putRes = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'text/markdown' },
+    body: selectedFile,
+  });
+  if (!putRes.ok) { showStatus('error', `S3 upload failed: ${putRes.status}`); uploadBtn.disabled = false; return; }
+
+  showStatus('info', 'Notifying worker queue…');
+  await fetch('/v1/uploads/notify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key, category: categorySelect.value }),
+  });
+
+  showStatus('success', `✅ Uploaded &amp; queued — <code class="font-mono text-xs bg-green-100 px-1 rounded">${key}</code>`);
+  selectedFile = null;
+  parsedHeaders = { h1: '', h2: '', h3: '' };
+  uscisPreview.classList.add('hidden');
+  dropZone.innerHTML = `
+    <p class="text-5xl mb-3">📤</p>
+    <p class="text-gray-600 font-medium">Click to select a file</p>
+    <p class="text-xs text-gray-400 mt-1">Markdown files only (.md)</p>
+    <input id="file-input" type="file" accept=".md" class="hidden">`;
+  document.getElementById('file-input').addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+  uploadBtn.disabled = true;
+  loadFiles();
+});
+
+function showStatus(type, html) {
+  const colors = {
+    info:    'bg-blue-50  text-blue-700  border border-blue-200',
+    success: 'bg-green-50 text-green-700 border border-green-200',
+    error:   'bg-red-50   text-red-700   border border-red-200',
+  };
+  statusEl.className = `rounded-lg px-4 py-2.5 text-sm ${colors[type]}`;
+  statusEl.innerHTML = html;
+  statusEl.classList.remove('hidden');
+}
+
+async function loadFiles() {
+  fileListEl.innerHTML = '<p class="px-5 py-4 text-sm text-gray-400 italic">Loading…</p>';
+  const files = await fetch('/upload/files').then(r => r.json());
+  if (files.length === 0) {
+    fileListEl.innerHTML = '<p class="px-5 py-4 text-sm text-gray-400 italic">No files uploaded yet.</p>';
+    return;
+  }
+  fileListEl.innerHTML = files.map(f => `
+    <div class="px-5 py-3 flex items-center gap-3">
+      <span class="text-gray-400 text-lg flex-shrink-0">📄</span>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-medium text-gray-700 truncate">${f.filename}</p>
+        <p class="text-xs text-gray-400">${(f.size / 1024).toFixed(1)} KB &middot; ${new Date(f.last_modified).toLocaleString()}</p>
+      </div>
+      <span class="text-xs px-2 py-0.5 rounded-full font-mono ${f.category === 'uscis' ? 'bg-indigo-50 text-indigo-500' : 'bg-gray-100 text-gray-500'}">${f.category}</span>
+      <span class="text-xs text-gray-400 font-mono truncate max-w-xs flex-shrink-0">${f.key}</span>
+    </div>`).join('');
+}
+
+document.getElementById('refresh-btn').addEventListener('click', loadFiles);
+loadFiles();
+</script>
+{% endblock %}

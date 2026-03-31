@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% block title %}S3 Browse – USCIS KB{% endblock %}
+
+{% block content %}
+<style>
+  a.chapter-active { background: rgb(224 231 255); color: rgb(67 56 202); font-weight: 600; }
+</style>
+
+<div class="flex h-[calc(100vh-3.5rem)]">
+
+  <!-- ── LEFT SIDEBAR ── -->
+  <aside class="w-80 flex-shrink-0 border-r border-gray-200 bg-white overflow-y-auto">
+    <div class="px-4 py-3 border-b border-gray-100 sticky top-0 bg-white z-10">
+      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">☁️ S3 · Volumes / Parts / Chapters</p>
+      <input id="content-search" type="search" placeholder="Search inside files…"
+             class="w-full text-xs border border-gray-200 rounded-md px-2.5 py-1.5 bg-gray-50
+                    focus:outline-none focus:ring-2 focus:ring-indigo-300 placeholder-gray-400">
+    </div>
+
+    <nav class="py-2">
+      {% for volume, parts in tree %}
+
+        {% set ns = namespace(total=0) %}
+        {% for part, files in parts.items() %}
+          {% for f in files %}{% set ns.total = ns.total + 1 %}{% endfor %}
+        {% endfor %}
+
+        <details class="group">
+          <summary class="flex items-center gap-2 px-4 py-2 cursor-pointer hover:bg-gray-50
+                          text-sm font-semibold text-gray-700 list-none select-none">
+            <span class="text-gray-400 group-open:rotate-90 transition-transform inline-block">▶</span>
+            <span class="flex-1 truncate">{{ pretty_vol(volume) }}</span>
+            <span class="text-xs text-gray-400 vol-count" data-total="{{ ns.total }}">
+              <span class="vol-matched">{{ ns.total }}</span>/{{ ns.total }}
+            </span>
+          </summary>
+
+          {% for part, files in parts.items() | sort %}
+            {% if part %}
+            <details class="ml-3">
+              <summary class="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-gray-50
+                              text-xs font-medium text-gray-600 list-none select-none">
+                <span class="text-gray-300">▶</span>
+                <span class="flex-1 truncate capitalize">{{ part.replace("_", " ") }}</span>
+              </summary>
+            {% endif %}
+              <ul class="{% if part %}ml-3{% endif %} pb-1">
+                {% for f in files | sort(attribute="chapter") %}
+                <li>
+                  <a href="#" data-path="{{ f.path }}"
+                     class="flex items-center gap-1.5 px-3 py-1 text-xs rounded transition cursor-pointer
+                            text-gray-600 hover:bg-gray-50 hover:text-gray-900">
+                    <span class="flex-1 truncate capitalize">
+                      {{ f.chapter.replace(".md","").replace("_"," ") }}
+                    </span>
+                    {% if f.words >= 8000 %}
+                      <span class="text-[10px] bg-orange-100 text-orange-500 px-1 rounded">⚠</span>
+                    {% endif %}
+                  </a>
+                </li>
+                {% endfor %}
+              </ul>
+            {% if part %}</details>{% endif %}
+          {% endfor %}
+        </details>
+
+      {% endfor %}
+    </nav>
+  </aside>
+
+  <!-- ── RIGHT PANEL ── -->
+  <main class="flex-1 overflow-y-auto bg-gray-50">
+
+    <div id="search-results" class="hidden max-w-4xl mx-auto px-8 py-6 space-y-4">
+      <p id="search-status" class="text-xs text-gray-400"></p>
+      <div id="search-list" class="space-y-3"></div>
+    </div>
+
+    <div id="content-pane">
+      <div class="flex flex-col items-center justify-center h-full text-center p-10 gap-6">
+        <span class="text-6xl">☁️</span>
+        <div>
+          <h2 class="text-xl font-semibold text-gray-700">Select a chapter from the left</h2>
+          <p class="text-sm text-gray-400 mt-1">Browsing S3 corpus (uscis_policy_manual_clean/)</p>
+        </div>
+        <div class="flex flex-wrap justify-center gap-4 mt-4">
+          {% set mini = [
+            ("Files",        summary.total,                              "bg-indigo-50 text-indigo-700"),
+            ("Total Words",  "{:,}".format(summary.total_words),        "bg-sky-50    text-sky-700"),
+            ("Total Tokens", "{:,}".format(summary.total_tokens),       "bg-violet-50 text-violet-700"),
+            ("Avg Tokens",   "{:,}".format(summary.mean_tokens),        "bg-green-50  text-green-700"),
+          ] %}
+          {% for label, val, cls in mini %}
+          <div class="rounded-xl border border-gray-200 {{ cls }} px-5 py-3 text-center">
+            <div class="text-lg font-bold">{{ val }}</div>
+            <div class="text-xs mt-0.5 opacity-70">{{ label }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+const contentInput  = document.getElementById('content-search');
+const searchResults = document.getElementById('search-results');
+const searchStatus  = document.getElementById('search-status');
+const searchList    = document.getElementById('search-list');
+const contentPane   = document.getElementById('content-pane');
+
+function setActive(a) {
+  document.querySelectorAll('.chapter-active').forEach(el => el.classList.remove('chapter-active'));
+  a.classList.add('chapter-active');
+}
+
+async function loadContent(path) {
+  searchResults.classList.add('hidden');
+  contentPane.classList.remove('hidden');
+  contentPane.innerHTML = '<div class="flex items-center justify-center h-32 text-gray-400 text-sm">Loading…</div>';
+  const html = await fetch('/s3/content/' + path).then(r => r.text());
+  contentPane.innerHTML = html;
+}
+
+document.querySelector('aside nav').addEventListener('click', function(e) {
+  const a = e.target.closest('a[data-path]');
+  if (!a) return;
+  e.preventDefault();
+  loadContent(a.dataset.path);
+  setActive(a);
+});
+
+searchList.addEventListener('click', function(e) {
+  const a = e.target.closest('a[data-path]');
+  if (!a) return;
+  e.preventDefault();
+  const path = a.dataset.path;
+  loadContent(path);
+  const sidebarLink = document.querySelector(`aside nav a[data-path="${CSS.escape(path)}"]`);
+  if (sidebarLink) setActive(sidebarLink);
+});
+
+function filterSidebar(matchedPaths) {
+  document.querySelectorAll('aside nav > details').forEach(function(vol) {
+    let volMatched = 0;
+    vol.querySelectorAll('details').forEach(function(part) {
+      let partMatched = 0;
+      part.querySelectorAll('li').forEach(function(li) {
+        const path = li.querySelector('a[data-path]')?.dataset.path || '';
+        const show = !matchedPaths || matchedPaths.has(path);
+        li.style.display = show ? '' : 'none';
+        if (show) { partMatched++; volMatched++; }
+      });
+      part.style.display = (!matchedPaths || partMatched) ? '' : 'none';
+      if (matchedPaths && partMatched) part.open = true;
+    });
+    vol.style.display = (!matchedPaths || volMatched) ? '' : 'none';
+    if (matchedPaths && volMatched) vol.open = true;
+    const matchedSpan = vol.querySelector('.vol-matched');
+    const total = parseInt(vol.querySelector('.vol-count')?.dataset.total || 0);
+    if (matchedSpan) matchedSpan.textContent = matchedPaths ? volMatched : total;
+  });
+}
+
+function highlight(text, q) {
+  const safe = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return text.replace(new RegExp(safe, 'gi'), m => `<mark class="bg-yellow-200 rounded px-0.5">${m}</mark>`);
+}
+
+function runSearch(q) {
+  if (q.length < 2) {
+    searchResults.classList.add('hidden');
+    contentPane.classList.remove('hidden');
+    searchStatus.textContent = '';
+    searchList.innerHTML = '';
+    filterSidebar(null);
+    return;
+  }
+  searchStatus.textContent = 'Searching…';
+  searchResults.classList.remove('hidden');
+  contentPane.classList.add('hidden');
+  searchList.innerHTML = '';
+  fetch('/s3/search?q=' + encodeURIComponent(q))
+    .then(r => r.json())
+    .then(function(results) {
+      filterSidebar(new Set(results.map(r => r.path)));
+      if (results.length === 0) { searchStatus.textContent = 'No matches.'; return; }
+      searchStatus.textContent = results.length + ' file(s) match' + (results.length === 100 ? ' (capped at 100)' : '');
+      searchList.innerHTML = results.map(function(r) {
+        return `<div class="bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-3 space-y-1">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs text-gray-400">${r.volume} › ${r.part}</span>
+            <a href="#" data-path="${r.path}" class="text-xs text-indigo-500 hover:underline flex-shrink-0">open →</a>
+          </div>
+          <a href="#" data-path="${r.path}" class="text-sm font-semibold text-indigo-700 hover:underline block">${r.chapter}</a>
+          <p class="text-xs text-gray-500 font-mono leading-relaxed">${highlight(r.snippet, q)}</p>
+        </div>`;
+      }).join('');
+    });
+}
+
+let debounceTimer;
+contentInput.addEventListener('input', function() {
+  clearTimeout(debounceTimer);
+  const q = this.value.trim();
+  debounceTimer = setTimeout(() => runSearch(q), 300);
+});
+
+// ── URL sync ──
+function pushURL(params) {
+  const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+  history.pushState(params || {}, '', '/s3/browse' + qs);
+}
+
+const _loadContent = loadContent;
+loadContent = function(path) { pushURL({ path }); return _loadContent(path); };
+
+const _runSearch = runSearch;
+runSearch = function(q) {
+  if (q.length >= 2) pushURL({ search: q });
+  else history.replaceState({}, '', '/s3/browse');
+  return _runSearch(q);
+};
+
+(function restoreFromURL() {
+  const p = new URLSearchParams(location.search);
+  if (p.has('path')) {
+    const path = p.get('path');
+    _loadContent(path);
+    const a = document.querySelector(`aside nav a[data-path="${CSS.escape(path)}"]`);
+    if (a) setActive(a);
+  } else if (p.has('search')) {
+    const q = p.get('search');
+    contentInput.value = q;
+    _runSearch(q);
+  }
+})();
+
+window.addEventListener('popstate', function(e) {
+  const st = e.state || {};
+  if (st.path) {
+    _loadContent(st.path);
+    const a = document.querySelector(`aside nav a[data-path="${CSS.escape(st.path)}"]`);
+    if (a) setActive(a);
+  } else if (st.search) {
+    contentInput.value = st.search;
+    _runSearch(st.search);
+  } else {
+    contentInput.value = '';
+    _runSearch('');
+  }
+});
+</script>
+{% endblock %}

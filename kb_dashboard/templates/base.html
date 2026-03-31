@@ -52,8 +52,23 @@
         Dashboard
       </a>
       <a href="/browse" class="text-indigo-200 hover:text-white text-sm font-medium transition
-                               {% if request.path.startswith('/browse') %}!text-white underline underline-offset-4{% endif %}">
+                               {% if request.path.startswith('/browse') and not request.path.startswith('/s3') %}!text-white underline underline-offset-4{% endif %}">
         Browse
+      </a>
+
+      <span class="text-indigo-500 opacity-40 select-none">|</span>
+
+      <a href="/upload" class="text-indigo-200 hover:text-white text-sm font-medium transition
+                               {% if request.path == '/upload' %}!text-white underline underline-offset-4{% endif %}">
+        ☁️ Upload
+      </a>
+      <a href="/s3/" class="text-indigo-200 hover:text-white text-sm font-medium transition
+                            {% if request.path == '/s3/' %}!text-white underline underline-offset-4{% endif %}">
+        S3 Dashboard
+      </a>
+      <a href="/s3/browse" class="text-indigo-200 hover:text-white text-sm font-medium transition
+                                  {% if request.path.startswith('/s3/browse') %}!text-white underline underline-offset-4{% endif %}">
+        S3 Browse
       </a>
     </div>
   </nav>

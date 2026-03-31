@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block title %}S3 Dashboard – USCIS KB{% endblock %}
+
+{% block content %}
+<div class="max-w-screen-xl mx-auto px-6 py-8 space-y-6">
+
+  <div>
+    <h1 class="text-2xl font-bold text-gray-900">S3 Knowledge Base Dashboard</h1>
+    <p class="text-sm text-gray-500 mt-1">USCIS Policy Manual · S3 production corpus (uscis_policy_manual_clean/)</p>
+  </div>
+
+  <!-- ── Stat Cards ── -->
+  <details class="bg-white rounded-xl border border-gray-200 shadow-sm" open>
+    <summary class="px-5 py-3 cursor-pointer font-semibold text-gray-800 flex items-center gap-2 select-none list-none">
+      <span>☁️ S3 Corpus Overview</span>
+    </summary>
+    <div class="px-5 pb-5">
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mt-2">
+        {% set cards = [
+          ("Total Files",    summary.total,                          "bg-green-50",   "text-green-700",  "📁", "Total .md files found in S3 under the clean prefix"),
+          ("Total Words",    "{:,}".format(summary.total_words),     "bg-sky-50",     "text-sky-700",    "📝", "Sum of all words across files"),
+          ("Total Tokens",   "{:,}".format(summary.total_tokens),    "bg-violet-50",  "text-violet-700", "🔢", "cl100k_base token count — approximation, Titan tokenizer differs"),
+          ("Avg Tokens/File","{:,}".format(summary.mean_tokens),     "bg-indigo-50",  "text-indigo-700", "📊", "Mean token count per file"),
+          ("Max Tokens",     "{:,}".format(summary.max_tokens),      "bg-orange-50",  "text-orange-700", "📏", "Largest file — needs splitting if above embedding model limit"),
+          ("Oversized",      summary.oversized_count,                "bg-red-50",     "text-red-600",    "⚠️", "Files with ≥ 8,000 words — should be split at ## sections before indexing"),
+        ] %}
+        {% for label, val, bg, color, icon, tip in cards %}
+        <div class="rounded-xl border border-gray-200 {{ bg }} p-4 flex flex-col gap-1 cursor-help"
+             data-tippy-content="{{ tip }}">
+          <span class="text-xl">{{ icon }}</span>
+          <span class="text-2xl font-bold {{ color }}">{{ val }}</span>
+          <span class="text-xs text-gray-500 font-medium">{{ label }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </details>
+
+  <!-- ── Distribution Charts ── -->
+  <details class="bg-white rounded-xl border border-gray-200 shadow-sm">
+    <summary class="px-5 py-3 cursor-pointer font-semibold text-gray-800 flex items-center gap-2 select-none list-none">
+      <span>📈 Distributions</span>
+    </summary>
+    <div class="px-5 pb-4 grid grid-cols-1 lg:grid-cols-2 gap-4 mt-2">
+      <div>{{ dist_word_chart | safe }}</div>
+      <div>{{ dist_token_chart | safe }}</div>
+    </div>
+  </details>
+
+  <!-- ── Chapter Explorer (Tabulator) ── -->
+  <details class="bg-white rounded-xl border border-gray-200 shadow-sm">
+    <summary class="px-5 py-3 cursor-pointer font-semibold text-gray-800 flex items-center gap-2 select-none list-none">
+      <span>🔍 Chapter Explorer</span>
+      <span class="text-xs text-gray-400 font-normal ml-1">sortable · groupable · clickable</span>
+    </summary>
+    <div class="px-5 pb-5 mt-2">
+      <div class="flex items-center gap-3 mb-3">
+        <label class="text-sm text-gray-600 font-medium">Group by:</label>
+        <select id="group-select"
+                class="text-sm border border-gray-300 rounded-md px-3 py-1.5 bg-white text-gray-700
+                       focus:outline-none focus:ring-2 focus:ring-indigo-400">
+          <option value="volume">Volume</option>
+          <option value="part">Part</option>
+          <option value="">None</option>
+        </select>
+      </div>
+      <div id="chapter-table"></div>
+    </div>
+  </details>
+
+  <!-- ── Per-Volume Summary ── -->
+  <details class="bg-white rounded-xl border border-gray-200 shadow-sm">
+    <summary class="px-5 py-3 cursor-pointer font-semibold text-gray-800 flex items-center gap-2 select-none list-none">
+      <span>📚 Per-Volume Summary</span>
+      <span class="ml-auto text-xs text-gray-400">click column headers to sort</span>
+    </summary>
+    <div class="px-5 pb-4 overflow-x-auto mt-2">
+      <table id="vol-table" class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-600 text-xs uppercase tracking-wide">
+          <tr>
+            <th class="px-4 py-3 text-left cursor-pointer select-none hover:bg-gray-100" data-col="0">Volume ↕</th>
+            <th class="px-4 py-3 text-right cursor-pointer select-none hover:bg-gray-100" data-col="1">Files ↕</th>
+            <th class="px-4 py-3 text-right cursor-pointer select-none hover:bg-gray-100" data-col="2">Median W ↕</th>
+            <th class="px-4 py-3 text-right cursor-pointer select-none hover:bg-gray-100" data-col="3">Median Tok ↕</th>
+            <th class="px-4 py-3 text-left cursor-pointer select-none hover:bg-gray-100 min-w-[180px]" data-col="4">Total Words ↕</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for row in vol_rows %}
+          <tr class="hover:bg-gray-50">
+            <td class="px-4 py-2 font-medium text-gray-800">{{ row.vol_label }}</td>
+            <td class="px-4 py-2 text-right text-gray-700">{{ row.files }}</td>
+            <td class="px-4 py-2 text-right text-gray-600">{{ "{:,}".format(row.median_words) }}</td>
+            <td class="px-4 py-2 text-right text-gray-600">{{ "{:,}".format(row.median_tokens) }}</td>
+            <td class="px-4 py-2">
+              <div class="flex items-center gap-2">
+                <div class="flex-1 bg-gray-100 rounded-full h-2">
+                  <div class="bg-indigo-400 h-2 rounded-full"
+                       style="width:{{ (row.total_words / max_words * 100) | round(1) }}%"></div>
+                </div>
+                <span class="text-gray-600 text-xs w-20 text-right">{{ "{:,}".format(row.total_words) }}</span>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <!-- ── Oversized Files ── -->
+  {% if oversized %}
+  <details class="bg-white rounded-xl border border-orange-200 shadow-sm">
+    <summary class="px-5 py-3 cursor-pointer font-semibold text-orange-700 flex items-center gap-2 select-none list-none">
+      <span>⚠️ Oversized Files (≥ 8,000 words)</span>
+      <span class="ml-auto bg-orange-100 text-orange-600 text-xs font-bold px-2 py-0.5 rounded-full">{{ oversized|length }}</span>
+    </summary>
+    <div class="px-5 pb-4 overflow-x-auto">
+      <p class="text-xs text-gray-500 mt-2 mb-3">These files will be split at <code>##</code> sections during chunking.</p>
+      <table class="w-full text-sm">
+        <thead class="text-xs uppercase text-gray-500 border-b border-gray-100">
+          <tr>
+            <th class="py-2 text-right pr-4">Words</th>
+            <th class="py-2 text-right pr-4">Tokens</th>
+            <th class="py-2 text-right pr-4">§</th>
+            <th class="py-2 text-left">File</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% for f in oversized %}
+          {% set rc = "bg-red-50" if f.words >= 12000 else ("bg-orange-50" if f.words >= 10000 else "bg-yellow-50") %}
+          {% set bc = "bg-red-100 text-red-600" if f.words >= 12000 else ("bg-orange-100 text-orange-600" if f.words >= 10000 else "bg-yellow-100 text-yellow-700") %}
+          <tr class="{{ rc }}">
+            <td class="py-2 pr-4 text-right font-mono">
+              <span class="text-xs px-2 py-0.5 rounded-full {{ bc }}">{{ "{:,}".format(f.words) }}</span>
+            </td>
+            <td class="py-2 pr-4 text-right text-gray-500 text-xs">{{ "{:,}".format(f.tokens) }}</td>
+            <td class="py-2 pr-4 text-right text-gray-400 text-xs">{{ f.sections }}</td>
+            <td class="py-2">
+              <a href="/s3/browse?path={{ f.path }}" class="font-mono text-xs text-indigo-600 hover:underline break-all">{{ f.path }}</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+  {% endif %}
+
+</div>
+
+<!-- ── Tabulator init ── -->
+<script>
+(function () {
+  const rows = {{ chapter_rows_json | safe }};
+  const table = new Tabulator("#chapter-table", {
+    data: rows,
+    layout: "fitColumns",
+    height: "520px",
+    groupBy: "volume",
+    groupToggleElement: "header",
+    groupStartOpen: false,
+    initialSort: [{ column: "words", dir: "desc" }],
+    columns: [
+      { title: "Volume",   field: "volume",  visible: false },
+      { title: "Part",     field: "part",    width: 220, headerFilter: "input" },
+      { title: "Chapter",  field: "chapter", minWidth: 200, headerFilter: "input",
+        tooltip: function(e, cell) { return cell.getRow().getData().path; },
+        formatter: function(cell) {
+          const row = cell.getRow().getData();
+          return `<a href="/s3/browse?path=${row.path}" class="text-indigo-600 hover:underline">${cell.getValue()}</a>`;
+        }, formatterParams: { allowHtml: true }
+      },
+      { title: "Words",    field: "words",    width: 90, sorter: "number",
+        formatter: function(cell){ return cell.getValue().toLocaleString(); } },
+      { title: "Tokens",   field: "tokens",   width: 90, sorter: "number",
+        formatter: function(cell){ return cell.getValue().toLocaleString(); } },
+      { title: "Sections", field: "sections", width: 80, sorter: "number" },
+      { title: "View",     field: "path",     width: 60, headerSort: false,
+        formatter: function(cell) {
+          return `<a href="/s3/browse?path=${cell.getValue()}" class="text-indigo-500 hover:underline text-xs">open</a>`;
+        }, formatterParams: { allowHtml: true }
+      },
+    ],
+  });
+  document.getElementById("group-select").addEventListener("change", function () {
+    table.setGroupBy(this.value);
+  });
+})();
+</script>
+
+<!-- ── Tooltips ── -->
+<script>
+  tippy('[data-tippy-content]', { trigger: 'click', placement: 'top', hideOnClick: true, maxWidth: 320 });
+</script>
+
+<!-- ── Sortable static tables ── -->
+<script>
+document.querySelectorAll("table th[data-col]").forEach(function(th) {
+  th.addEventListener("click", function() {
+    const col   = parseInt(th.dataset.col);
+    const tbody = th.closest("table").querySelector("tbody");
+    const rows  = Array.from(tbody.querySelectorAll("tr"));
+    const asc   = th.dataset.asc !== "1";
+    th.dataset.asc = asc ? "1" : "0";
+    rows.sort(function(a, b) {
+      const av = a.cells[col]?.innerText.replace(/[^0-9.\-]/g,"") || a.cells[col]?.innerText || "";
+      const bv = b.cells[col]?.innerText.replace(/[^0-9.\-]/g,"") || b.cells[col]?.innerText || "";
+      const an = parseFloat(av), bn = parseFloat(bv);
+      if (!isNaN(an) && !isNaN(bn)) return asc ? an - bn : bn - an;
+      return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+    rows.forEach(r => tbody.appendChild(r));
+  });
+});
+</script>
+{% endblock %}

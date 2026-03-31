@@ -1,0 +1,17 @@
+---
+description:  pre-commit sync Diagrams+docs+preferences
+globs:
+alwaysApply: true
+---
+
+# Pre-commit Diagrams+Docs+Preferences Review
+
+**Before any deploy or commit, stop and:
+
+1. **Scan** — run git status to identify what changed.
+2. **Update affected docs** — for each `.md` file in the project
+ - check if the changes make it stale. 
+ - Investigate the changes and if needed reread the relevant project parts. 
+ - edit the relevant files to update the docs for the user to review.
+ - you may encounter stale docs regardless of the current git changes, if needed - fix them too.
+3. **Capture new preferences** — same for preferences files: during this session you learned a new user preference (coding style, tool choice, workflow habit), add ≤2 lines to the relevant section of `CLAUDE.md` and cursor preferences files too. Skip silently if nothing new.
