@@ -62,6 +62,18 @@
 
 ---
 
+## Codebase Overview
+
+RAG pipeline on USCIS Policy Manual (446 clean `.md` files). Two apps: `kb_dashboard/` (local dev inspector, fully working) and `app.py` (production API, skeleton). Ingestion worker and query route not yet implemented.
+
+**Stack**: Flask · Tailwind CDN · Tabulator.js · Plotly · Bedrock (Titan + Claude) · OpenSearch Serverless · S3 · SQS · EC2 · systemd
+
+**Structure**: `scripts/` → data pipeline · `src/` → production modules (stubs) · `kb_dashboard/` → local dev tool · `opensearch/` → index schema · `systemd/` → EC2 service configs
+
+For detailed architecture, see [docs/CODEBASE_MAP.md](docs/CODEBASE_MAP.md).
+
+---
+
 ## Open Issues
 - **Footnote gap:** `clean_kb.py` misses `[^ n]` / bare `[n]` — 4 files still noisy. Awaiting fix instruction.
 - **Token counts approximate:** `tiktoken cl100k_base` ≠ Titan tokenizer. Good enough proxy for now.
