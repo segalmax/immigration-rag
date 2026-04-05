@@ -14,7 +14,7 @@ total_tokens: 68000
 
 This is an **educational AWS RAG (Retrieval-Augmented Generation) project** that answers immigration policy questions using the USCIS Policy Manual as a knowledge base. The corpus (494 raw Markdown files, 446 after cleaning) was parsed from a single HTML export of the USCIS website.
 
-The project has two distinct apps: a **local dev KB dashboard** (`kb_dashboard/`) for inspecting and uploading the corpus, and a **production Flask API** (`app.py`) that will serve RAG queries. The ingestion pipeline (S3 → SQS → EC2 worker → OpenSearch k-NN) and the query endpoint are **not yet implemented** — they exist as skeletons awaiting Phase 2-3 development.
+The project now has one main Flask app, `app.py`, which serves the KB dashboard, upload flow, and future query routes. The ingestion pipeline (S3 → SQS → EC2 worker → OpenSearch k-NN) works through `worker.py`, while the query endpoint is still not implemented.
 
 ---
 
@@ -23,13 +23,13 @@ The project has two distinct apps: a **local dev KB dashboard** (`kb_dashboard/`
 ```mermaid
 flowchart TD
     subgraph Dev["Local Dev"]
-        KBDash["KB Dashboard\nkb_dashboard/app.py\n:5051"]
+        KBDash["Main Flask App\napp.py\n:5051"]
         LocalCorpus[("Local Corpus\ndata/uscis_policy_manual_clean/\n446 .md files")]
         KBDash <-->|reads| LocalCorpus
     end
 
     subgraph Ingestion["1 · Ingestion Pipeline"]
-        Browser["Browser Upload\nkb_dashboard upload UI"]
+        Browser["Browser Upload\napp.py upload UI"]
         S3[("S3 Bucket\n$S3_BUCKET")]
         SQS{{"SQS Queue\n$SQS_QUEUE_URL"}}
         Worker["EC2 Worker\nworker.py\n⚠️ NOT IMPLEMENTED"]
@@ -37,8 +37,8 @@ flowchart TD
         Bedrock1["Bedrock\nTitan Embeddings\n1024-dim"]
 
         Browser -->|presigned PUT| S3
-        Browser -->|POST /v1/uploads/notify| KBDash
-        KBDash -->|SQS send_message| SQS
+        Browser -->|PUT object| S3
+        S3 -->|ObjectCreated event| SQS
         SQS -->|poll| Worker
         Worker -->|get_object| S3
         Worker -->|embed| Bedrock1
@@ -67,14 +67,42 @@ flowchart TD
 | **Phase 1 — KB** | `scripts/parse_uscis.py` | ✅ Done |
 | | `scripts/clean_kb.py` | ✅ Done (minor footnote regex gap) |
 | | `scripts/analyze_kb.py` | ✅ Done |
-| | `kb_dashboard/` (full dashboard) | ✅ Done |
+| | `app.py` (dashboard + upload UI) | ✅ Done |
 | **Phase 2 — Chunking** | `src/chunking.py` | ⚠️ Stub — raises `NotImplementedError` |
 | | `src/bedrock_utils.py` | ⚠️ Skeleton — constants only |
 | | `scripts/create_index.py` | ✅ Done |
 | **Phase 3 — AWS Pipeline** | `src/opensearch_utils.py` | ❌ Empty file |
 | | `src/s3_utils.py` | ❌ Empty file |
-| | `worker.py` | ❌ Empty file |
-| | `app.py` (RAG query route) | ❌ Only `/health` exists |
+| | `worker.py` | ✅ Done |
+| | `app.py` (`/ask` route) | ⚠️ Returns `501 Not Implemented` |
+
+---
+
+## Current Progress
+
+**Done**
+
+- USCIS corpus parsed and cleaned.
+- Local dashboard browsing works.
+- Upload UI works through `app.py`.
+- Upload flow works through presigned S3 PUT + S3 event to SQS.
+- Worker runtime lives at `worker.py`.
+- OpenSearch index creation works through `scripts/create_index.py`.
+- VS Code launch configs exist for app and worker debugging.
+
+**Not Done Yet**
+
+- `POST /ask` still returns `501 Not Implemented`.
+- `src/opensearch_utils.py`, `src/s3_utils.py`, and most of `src/bedrock_utils.py` are still placeholders.
+- Runtime paths in `app.py` are still hardcoded instead of env-driven.
+- `worker.py` still depends on `OS_HOST`, so collection recreation can still stale-break it.
+- Deployment to EC2 is not ready.
+
+**Deployment Status**
+
+- `systemd/rag-api.service` is intentionally empty for now.
+- `systemd/rag-worker.service` is intentionally empty for now.
+- Both files need to be rewritten later when the real EC2 layout, command lines, and env locations are finalized.
 
 ---
 
@@ -82,14 +110,12 @@ flowchart TD
 
 ```
 immigration-rag-claud-code-folder/
-├── app.py                        # Production Flask API (skeleton — /health only)
-├── worker.py                     # SQS consumer (EMPTY)
-├── requirements.txt              # All Python deps for both apps
-├── .env.example                  # All required env vars documented here
+├── app.py                        # Main Flask app: dashboard, uploads, /health, stub /ask
+├── worker.py                     # SQS consumer: chunk + embed + index
+├── requirements.txt              # Python deps for app + worker + scripts
 ├── CLAUDE.md                     # Session rules + project memory for Claude Code
 │
-├── kb_dashboard/                 # LOCAL DEV TOOL — not deployed
-│   ├── app.py                    # Full-featured Flask corpus inspector
+├── kb_dashboard/                 # Template assets kept under the old folder name
 │   └── templates/
 │       ├── base.html             # Tailwind CDN shell + nav
 │       ├── index.html            # Dashboard: stats, charts, chapter explorer
@@ -116,11 +142,11 @@ immigration-rag-claud-code-folder/
 │   └── index_schema.json         # k-NN index mapping + AOSS collection config
 │
 ├── systemd/
-│   ├── rag-api.service           # Gunicorn service (2 workers, port 5000)
-│   └── rag-worker.service        # Python worker service (restarts on crash)
+│   ├── rag-api.service           # Empty placeholder until EC2 deployment layout is finalized
+│   └── rag-worker.service        # Empty placeholder until EC2 deployment layout is finalized
 │
 ├── tests/
-│   └── test_kb.py                # pytest — tests kb_dashboard helper functions
+│   └── test_kb.py                # pytest — tests root app helpers and routes
 │
 ├── data/
 │   ├── uscis_policy_manual/      # 494 raw .md files (git-ignored)
@@ -136,9 +162,9 @@ immigration-rag-claud-code-folder/
 
 ## Module Guide
 
-### `kb_dashboard/app.py` — The Main Dev Tool
+### `app.py` — The Main Flask App
 
-**Purpose**: Full-featured Flask corpus inspector. The most complete part of the codebase.
+**Purpose**: Full-featured Flask app for corpus inspection, upload debugging, `/health`, and a stub `/ask`.
 
 **Key routes:**
 
@@ -150,16 +176,16 @@ immigration-rag-claud-code-folder/
 | `/search?q=` | GET | Full-text search, returns JSON (max 100 results) |
 | `/upload` | GET | Upload UI |
 | `/v1/uploads/presign` | POST | Generates S3 presigned PUT URL (expires 300s) |
-| `/v1/uploads/notify` | POST | Sends SQS message, clears S3 cache |
 | `/s3/`, `/s3/browse`, `/s3/content/*`, `/s3/search` | GET | Mirrors of local routes but reads from S3 |
 
 **Key helper functions** (importable, tested):
 `word_count`, `token_count`, `footnote_count`, `residual_footnote_count`, `section_count`, `is_stub`, `vol_sort_key`, `pretty_vol`, `word_bucket`, `token_bucket`
 
 **Gotchas:**
-- `RAW_ROOT` and `CLEAN_ROOT` are **hardcoded** relative paths to `../../data/` — must be env vars before EC2 deploy
+- `RAW_ROOT` and `CLEAN_ROOT` are **hardcoded** relative paths to `data/` — must be env vars before EC2 deploy
 - Entire corpus is loaded into `_cache` in memory on first request — fine locally, bad on a t2.micro
 - S3 scan reads every `.md` file body inline — slow for large buckets
+- Worker now expects native S3 event messages on SQS; any legacy custom queue messages should be drained before debugging
 
 ---
 
@@ -231,22 +257,23 @@ All **skeleton/empty stubs**. Nothing here runs yet.
 
 ## Gotchas
 
-1. **`worker.py` is empty** — the systemd service will start and immediately crash-loop
-2. **`RAW_ROOT`/`CLEAN_ROOT` hardcoded** in `kb_dashboard/app.py` — breaks on EC2
-3. **`chunk_id` vs `chunk_index`** — OpenSearch schema uses `chunk_id`, CLAUDE.md says `chunk_index`. Inconsistency to resolve before first indexing run
-4. **`check_aws.py` and `scripts/worker.py` still trust `OS_HOST`** — unlike `create_index.py`, they are still vulnerable to stale endpoints after collection recreation
+1. **`RAW_ROOT`/`CLEAN_ROOT` hardcoded** in `app.py` — breaks on EC2
+2. **`chunk_id` vs `chunk_index`** — OpenSearch schema uses `chunk_id`, CLAUDE.md says `chunk_index`. Inconsistency to resolve before first indexing run
+3. **`check_aws.py` and `worker.py` still trust `OS_HOST`** — unlike `create_index.py`, they are still vulnerable to stale endpoints after collection recreation
+4. **`/ask` is still a stub** — `app.py` returns `501 Not Implemented`
 5. **`innerproduct` requires normalized vectors** — Titan embeddings must be L2-normalized before indexing or similarity scores will be wrong
 6. **AWS Account ID exposed** in `opensearch/index_schema.json` — IAM ARNs contain `538134613779`
 7. **tiktoken ≠ Titan tokenizer** — `cl100k_base` is an approximation; exact Titan token counts may differ
 8. **`analyze_kb.py` hardcodes `"48 files"`** in rendered report — will be wrong if corpus changes
+9. **`systemd/` files are intentionally empty** — they must be rewritten when EC2 deployment starts
 
 ---
 
 ## Navigation Guide
 
-**To start the KB dashboard locally:**
+**To start the Flask app locally:**
 ```bash
-cd kb_dashboard && flask run --port 5051
+PORT=5051 python app.py
 ```
 
 **To re-run the data pipeline from scratch:**
@@ -264,14 +291,14 @@ python scripts/create_index.py
 **To implement chunking (next step):**
 → Edit `src/chunking.py` — implement `chunk_document()` using `langchain_text_splitters.MarkdownHeaderTextSplitter`
 
-**To implement the SQS worker:**
-→ Edit `worker.py` — poll SQS, call `src/chunking.py`, `src/bedrock_utils.py`, `src/opensearch_utils.py`
+**To debug the SQS worker:**
+→ Run `worker.py` and make sure the queue contains only S3 `ObjectCreated` event messages
 
 **To implement the RAG query endpoint:**
-→ Edit `app.py` — add `POST /ask` route using `src/opensearch_utils.py` + `src/bedrock_utils.py`
+→ Replace the stub `POST /ask` route in `app.py` using `src/opensearch_utils.py` + `src/bedrock_utils.py`
 
 **To deploy to EC2:**
-1. Fix hardcoded paths in `kb_dashboard/app.py` → env vars
+1. Fix hardcoded paths in `app.py` → env vars
 2. Fill `.env` with real AWS values
-3. Copy systemd services to `/etc/systemd/system/`
+3. Rewrite the empty `systemd/` service files for the real deployment layout
 4. `systemctl enable rag-api rag-worker && systemctl start rag-api rag-worker`

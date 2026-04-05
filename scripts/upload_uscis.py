@@ -1,6 +1,6 @@
 """
 scripts/upload_uscis.py
-Bulk upload the local USCIS clean corpus to S3, then enqueue each file in SQS.
+Bulk upload the local USCIS clean corpus to S3.
 S3 key is derived from the file's H1/H2 headers: uscis_policy_manual_clean/{h1_slug}/{h2_slug}/{filename}
 
 Usage:
@@ -9,7 +9,6 @@ Usage:
     python scripts/upload_uscis.py --limit 5
 """
 import argparse
-import json
 import os
 import pathlib
 import re
@@ -21,12 +20,11 @@ dotenv.load_dotenv()
 
 CLEAN_ROOT   = pathlib.Path(__file__).parent.parent / "data" / "uscis_policy_manual_clean"
 S3_BUCKET    = os.environ["S3_BUCKET"]
-SQS_URL      = os.environ["SQS_QUEUE_URL"]
 REGION       = os.environ["AWS_REGION"]
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Bulk upload USCIS clean corpus to S3 + SQS")
+    p = argparse.ArgumentParser(description="Bulk upload USCIS clean corpus to S3")
     p.add_argument("--dry-run", action="store_true", help="Print what would happen, no uploads")
     p.add_argument("--limit", type=int, default=0, help="Max files to process (0 = all)")
     return p.parse_args()
@@ -53,7 +51,7 @@ def s3_key_for(h1: str, h2: str, filename: str) -> str:
     return f"uscis_policy_manual_clean/{filename}"
 
 
-def upload_file(s3, sqs, md_path: pathlib.Path, dry_run: bool) -> str:
+def upload_file(s3, md_path: pathlib.Path, dry_run: bool) -> str:
     text     = md_path.read_text(encoding="utf-8")
     h1, h2, h3 = extract_top_headers(text)
     key      = s3_key_for(h1, h2, md_path.name)
@@ -67,16 +65,11 @@ def upload_file(s3, sqs, md_path: pathlib.Path, dry_run: bool) -> str:
         ContentType = "text/markdown",
         Metadata    = {"category": "uscis"},
     )
-    sqs.send_message(
-        QueueUrl    = SQS_URL,
-        MessageBody = json.dumps({"s3_key": key, "category": "uscis"}),
-    )
     return key
 
 
 def run(args: argparse.Namespace) -> None:
-    s3  = boto3.client("s3",  region_name=REGION)
-    sqs = boto3.client("sqs", region_name=REGION)
+    s3 = boto3.client("s3", region_name=REGION)
 
     files = sorted(CLEAN_ROOT.rglob("*.md"))
     if args.limit:
@@ -84,7 +77,7 @@ def run(args: argparse.Namespace) -> None:
 
     print(f"{'[DRY RUN] ' if args.dry_run else ''}Uploading {len(files)} files to s3://{S3_BUCKET}/uscis_policy_manual_clean/")
     for i, md_path in enumerate(files, 1):
-        key = upload_file(s3, sqs, md_path, args.dry_run)
+        key = upload_file(s3, md_path, args.dry_run)
         print(f"  [{i}/{len(files)}] {key}")
 
     print(f"\nDone. {'Would have uploaded' if args.dry_run else 'Uploaded'} {len(files)} files.")

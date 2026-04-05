@@ -4,12 +4,7 @@ Basic quality and smoke tests for the USCIS KB dashboard.
 Run with:  pytest tests/ -v
 """
 import re
-import sys
 import pytest
-from pathlib import Path
-
-# Make kb_dashboard importable from tests/
-sys.path.insert(0, str(Path(__file__).parent.parent / "kb_dashboard"))
 from app import (
     word_count, token_count, is_stub,
     vol_sort_key, footnote_count, residual_footnote_count,
@@ -100,9 +95,9 @@ def test_browse_returns_200(client):
     assert r.status_code == 200
 
 def test_browse_known_file_returns_200(client):
-    r = client.get(f"/browse/{KNOWN_FILE}")
+    r = client.get(f"/content/{KNOWN_FILE}")
     assert r.status_code == 200
 
 def test_browse_nonexistent_returns_404(client):
-    r = client.get("/browse/volume_99_fake/part_z/chapter_0.md")
+    r = client.get("/content/volume_99_fake/part_z/chapter_0.md")
     assert r.status_code == 404

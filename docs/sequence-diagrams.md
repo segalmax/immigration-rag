@@ -25,14 +25,11 @@ sequenceDiagram
 
     C->>S3: PUT presigned_url (file bytes)
     S3-->>C: 200 OK
-
-    C->>F: POST /v1/uploads/notify {key, category}
-    F->>SQS: send_message {s3_key, category}
-    F-->>C: {ok: true}
+    S3->>SQS: ObjectCreated event
 
     loop Worker polling (WaitTimeSeconds=5)
         W->>SQS: receive_message
-        SQS-->>W: {s3_key, category}
+        SQS-->>W: {Records:[...]}
     end
 
     W->>S3: GetObject(s3_key)

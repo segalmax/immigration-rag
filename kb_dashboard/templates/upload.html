@@ -159,14 +159,7 @@ uploadBtn.addEventListener('click', async () => {
   });
   if (!putRes.ok) { showStatus('error', `S3 upload failed: ${putRes.status}`); uploadBtn.disabled = false; return; }
 
-  showStatus('info', 'Notifying worker queue…');
-  await fetch('/v1/uploads/notify', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ key, category: categorySelect.value }),
-  });
-
-  showStatus('success', `✅ Uploaded &amp; queued — <code class="font-mono text-xs bg-green-100 px-1 rounded">${key}</code>`);
+  showStatus('success', `✅ Uploaded — S3 event will enqueue the worker. <code class="font-mono text-xs bg-green-100 px-1 rounded">${key}</code>`);
   selectedFile = null;
   parsedHeaders = { h1: '', h2: '', h3: '' };
   uscisPreview.classList.add('hidden');
