@@ -22,7 +22,7 @@ import requests_aws4auth
 
 dotenv.load_dotenv()
 
-REGION       = "eu-central-1"
+REGION       = os.environ["AWS_REGION"]
 INDEX        = os.environ["OS_INDEX"]
 SCROLL_SIZE  = 500
 BULK_SIZE    = 500
@@ -85,10 +85,10 @@ def _policies(col_name: str) -> dict:
 
 def _resolve(col_name: str) -> tuple[str, str]:
     client = boto3.client("opensearchserverless", region_name=REGION)
-    cols = client.list_collections(collectionFilters={"name": col_name})["collectionSummaries"]
-    assert cols, f"Collection '{col_name}' not found in AWS"
-    col_id = cols[0]["id"]
-    return col_id, f"https://{col_id}.{REGION}.aoss.amazonaws.com"
+    details = client.batch_get_collection(names=[col_name])["collectionDetails"]
+    assert details, f"Collection '{col_name}' not found in AWS"
+    detail = details[0]
+    return detail["id"], detail["collectionEndpoint"]
 
 
 def _auth() -> requests_aws4auth.AWS4Auth:
@@ -145,7 +145,6 @@ def up(col_name: str, skip_restore: bool = False):
         col_id = client.list_collections(collectionFilters={"name": col_name})["collectionSummaries"][0]["id"]
         print(f"  exists: id={col_id}, waiting for ACTIVE...")
 
-    ep = f"https://{col_id}.{REGION}.aoss.amazonaws.com"
     while True:
         status = client.batch_get_collection(ids=[col_id])["collectionDetails"][0]["status"]
         if status == "ACTIVE": break
@@ -154,6 +153,7 @@ def up(col_name: str, skip_restore: bool = False):
 
     print("Waiting 20s for policies to propagate...")
     time.sleep(20)
+    _, ep = _resolve(col_name)
 
     cf = SCHEMA_FILE
     assert os.path.exists(cf), f"No schema at {cf}. Run --down on a live collection first."
