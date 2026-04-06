@@ -58,8 +58,8 @@ alwaysApply: true
 - **Educational AWS class project** — instructor requires Flask.
 - **Goal:** RAG app — USCIS Policy Manual → S3 → SQS → EC2 worker → OpenSearch (k-NN) → Claude via Bedrock.
 - **Corpus:** `uscis_policy_manual/` (raw 494) · `uscis_policy_manual_clean/` (clean 446).
-- `app.py` serves the KB dashboard, uploads, and **`/ask`** (RAG: Titan embed → OpenSearch k-NN → Claude). Titan `dimensions` matches the live index: [`embedding_config.py`](embedding_config.py) loads it from `GET /_mapping` once per process (`load_opensearch_vector_spec`), not from env or a hardcoded size.
-- **`/ask` answers:** [`rag_query.py`](rag_query.py) system prompt is **retrieval-grounded only** — refuse when context is insufficient or confidence is low; do not answer from general model knowledge.
+- `app.py` serves the KB dashboard, uploads, and **`/ask`** (RAG: Titan embed → OpenSearch k-NN → Claude). Titan `dimensions` matches the live index: [`src/bedrock_utils.py`](src/bedrock_utils.py) loads it from `GET /_mapping` once per process (`load_opensearch_vector_spec`), not from env or a hardcoded size.
+- **`/ask` answers:** [`src/bedrock_utils.py`](src/bedrock_utils.py) (`run_ask`) system prompt is **retrieval-grounded only** — refuse when context is insufficient or confidence is low; do not answer from general model knowledge.
 - **Two upload tracks:** USCIS (category=uscis, S3 key from H1/H2 headers, rich metadata) · Other (category=other, flat `uploads/` prefix, minimal metadata).
 - **SQS trigger:** S3 `ObjectCreated` event sends the uploaded object to SQS after browser PUT completes.
 - **Chunking:** `MarkdownHeaderTextSplitter` first (section_path metadata per chunk) → `RecursiveCharacterTextSplitter` only for chunks >2000 chars.
@@ -70,11 +70,11 @@ alwaysApply: true
 
 ## Codebase Overview
 
-RAG pipeline on USCIS Policy Manual (446 clean `.md` files). `app.py` is the main Flask app (including `POST /ask`), and `worker.py` is the ingestion worker. Shared embedding config: [`embedding_config.py`](embedding_config.py).
+RAG pipeline on USCIS Policy Manual (446 clean `.md` files). `app.py` is the main Flask app (including `POST /ask`), and `worker.py` is the ingestion worker. Titan/OpenSearch vector spec + `/ask` RAG live in [`src/bedrock_utils.py`](src/bedrock_utils.py). Other AWS helpers: [`src/chunking.py`](src/chunking.py), [`src/s3_utils.py`](src/s3_utils.py), [`src/opensearch_utils.py`](src/opensearch_utils.py).
 
 **Stack**: Flask · Tailwind CDN · Tabulator.js · Plotly · Bedrock (Titan + Claude) · OpenSearch Serverless · S3 · SQS · EC2 · systemd
 
-**Structure**: `scripts/` → one-off data tools · `app.py` + `worker.py` → main runtimes · `kb_dashboard/templates/` → Flask templates · `opensearch/` → index schema · `systemd/` → empty EC2 deployment placeholders
+**Structure**: `scripts/` → one-off data tools · `app.py` + `worker.py` → main runtimes · `src/` → shared chunk + AWS clients · `kb_dashboard/templates/` → Flask templates · `opensearch/` → index schema · `systemd/` → empty EC2 deployment placeholders
 
 For detailed architecture, see [docs/CODEBASE_MAP.md](docs/CODEBASE_MAP.md).
 

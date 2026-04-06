@@ -14,12 +14,13 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 import dotenv
-import boto3
-import embedding_config
-import requests
-import requests_aws4auth
 
 dotenv.load_dotenv()
+
+import boto3
+import requests
+import src.bedrock_utils
+import src.opensearch_utils
 
 REGION        = os.environ["AWS_REGION"]
 S3_BUCKET     = os.environ["S3_BUCKET"]
@@ -49,30 +50,27 @@ def check_sqs():
     return f"~{attrs['ApproximateNumberOfMessages']} message(s) in queue"
 
 
-def _aoss_auth() -> requests_aws4auth.AWS4Auth:
-    creds = boto3.Session().get_credentials().get_frozen_credentials()
-    return requests_aws4auth.AWS4Auth(creds.access_key, creds.secret_key, REGION, "aoss", session_token=creds.token)
-
-
 def check_opensearch():
-    resp = requests.get(OS_ENDPOINT + f"/{OS_INDEX}", auth=_aoss_auth(), timeout=10)
+    resp = requests.get(OS_ENDPOINT + f"/{OS_INDEX}", auth=src.opensearch_utils.OPENSEARCH_HTTP_AUTH, timeout=10)
     return f"HTTP {resp.status_code} — index={OS_INDEX}"
 
 
 def check_claude():
-    client = boto3.client("bedrock-runtime", region_name=REGION)
     body = json.dumps({"anthropic_version": "bedrock-2023-05-31", "max_tokens": 10, "messages": [{"role": "user", "content": "hi"}]})
-    out = json.loads(client.invoke_model(modelId=CLAUDE, body=body)["body"].read())
+    out = src.bedrock_utils.invoke_claude(body, model_id=CLAUDE)
     return f"stop_reason={out['stop_reason']}"
 
 
 def check_titan():
-    embedding_config.load_opensearch_vector_spec(OS_ENDPOINT, OS_INDEX, _aoss_auth())
-    client = boto3.client("bedrock-runtime", region_name=REGION)
-    body = embedding_config.titan_embed_invoke_body_json("test")
-    out = json.loads(client.invoke_model(modelId=TITAN, body=body)["body"].read())
+    src.bedrock_utils.load_opensearch_vector_spec(OS_ENDPOINT, OS_INDEX, src.opensearch_utils.OPENSEARCH_HTTP_AUTH)
+    body = src.bedrock_utils.titan_embed_invoke_body_json("test")
+    out = json.loads(
+        src.bedrock_utils.BEDROCK_RUNTIME.invoke_model(
+            modelId=TITAN, body=body, contentType="application/json", accept="application/json"
+        )["body"].read()
+    )
     got = len(out["embedding"])
-    want = embedding_config.embedding_dimension()
+    want = src.bedrock_utils.embedding_dimension()
     assert got == want, f"Titan embedding dim {got} != index mapping {want}"
     return f"embedding dim={got} (from OpenSearch _mapping)"
 

@@ -14,7 +14,7 @@ total_tokens: 68000
 
 This is an **educational AWS RAG (Retrieval-Augmented Generation) project** that answers immigration policy questions using the USCIS Policy Manual as a knowledge base. The corpus (494 raw Markdown files, 446 after cleaning) was parsed from a single HTML export of the USCIS website.
 
-The project has one main Flask app, `app.py`, which serves the KB dashboard, upload flow, and **`/ask`** (RAG via [`rag_query.py`](../rag_query.py) + [`embedding_config.py`](../embedding_config.py)). Ingestion (S3 → SQS → worker → OpenSearch k-NN) runs in [`worker.py`](../worker.py).
+The project has one main Flask app, `app.py`, which serves the KB dashboard, upload flow, and **`/ask`** (RAG via [`src/bedrock_utils.py`](../src/bedrock_utils.py): `run_ask`). Ingestion (S3 → SQS → worker → OpenSearch k-NN) runs in [`worker.py`](../worker.py).
 
 ---
 
@@ -68,14 +68,12 @@ flowchart TD
 | | `scripts/clean_kb.py` | ✅ Done (minor footnote regex gap) |
 | | `scripts/analyze_kb.py` | ✅ Done |
 | | `app.py` (dashboard + upload UI) | ✅ Done |
-| **Phase 2 — Chunking** | `worker.py` (LangChain splitters) | ✅ Done |
-| | `src/chunking.py` | ⚠️ Legacy stub — not used by worker |
+| **Phase 2 — Chunking** | `src/chunking.py` + `worker.py` | ✅ Done (LangChain splitters) |
 | | `scripts/create_index.py` | ✅ Done |
-| **Phase 3 — AWS Pipeline** | `src/opensearch_utils.py` | ❌ Empty (unused) |
-| | `src/s3_utils.py` | ❌ Empty (unused) |
+| **Phase 3 — AWS Pipeline** | `src/s3_utils.py`, `src/opensearch_utils.py`, `src/bedrock_utils.py` | ✅ Used by `worker.py` + `app.py` `/ask` |
 | | `worker.py` | ✅ Done |
-| | `app.py` + `rag_query.py` (`/ask`) | ✅ RAG query path |
-| | `embedding_config.py` | ✅ Titan body + `GET /_mapping` dimension cache |
+| | `app.py` (`/ask` → `src/bedrock_utils.run_ask`) | ✅ RAG query path |
+| | `src/bedrock_utils.py` | ✅ Titan body, `GET /_mapping` cache, Claude, `run_ask` |
 
 ---
 
@@ -94,7 +92,6 @@ flowchart TD
 
 **Not Done Yet**
 
-- `src/opensearch_utils.py`, `src/s3_utils.py`, and most of `src/bedrock_utils.py` are still unused placeholders.
 - Runtime paths in `app.py` are still hardcoded instead of env-driven.
 - `worker.py` still depends on `OS_HOST`, so collection recreation can still stale-break it.
 - Deployment to EC2 is not ready.
@@ -113,8 +110,6 @@ flowchart TD
 immigration-rag-claud-code-folder/
 ├── app.py                        # Main Flask app: dashboard, uploads, /health, /ask
 ├── worker.py                     # SQS consumer: chunk + embed + index
-├── embedding_config.py           # Titan JSON body; dimension from live OpenSearch _mapping
-├── rag_query.py                  # POST /ask backend: embed, k-NN, Claude
 ├── requirements.txt              # Python deps for app + worker + scripts
 ├── CLAUDE.md                     # Session rules + project memory for Claude Code
 │
@@ -136,11 +131,11 @@ immigration-rag-claud-code-folder/
 │   ├── create_index.py           # OpenSearch index creation (run once)
 │   └── smoke_test.py             # Basic HTTP smoke test
 │
-├── src/                          # Production modules (Phase 2-3)
-│   ├── bedrock_utils.py          # Env var constants only (skeleton)
-│   ├── chunking.py               # chunk_document() — raises NotImplementedError
-│   ├── opensearch_utils.py       # EMPTY
-│   └── s3_utils.py               # EMPTY
+├── src/                          # Shared AWS + chunking (imported by worker + /ask)
+│   ├── bedrock_utils.py          # Titan/OpenSearch spec, BEDROCK_RUNTIME, embed, Claude, run_ask
+│   ├── chunking.py               # MarkdownHeader + Recursive splitters → chunk_document()
+│   ├── opensearch_utils.py       # SigV4 auth; index _doc; k-NN search
+│   └── s3_utils.py               # S3_CLIENT; download_object_text()
 │
 ├── opensearch/
 │   └── index_schema.json         # k-NN index mapping + AOSS collection config
@@ -168,7 +163,7 @@ immigration-rag-claud-code-folder/
 
 ### `app.py` — The Main Flask App
 
-**Purpose**: Corpus inspection, upload debugging, `/health`, and **RAG** at `/ask` (lazy-imports [`rag_query.py`](../rag_query.py)).
+**Purpose**: Corpus inspection, upload debugging, `/health`, and **RAG** at `/ask` (lazy-imports [`src/bedrock_utils`](../src/bedrock_utils.py)).
 
 **Key routes:**
 
@@ -205,9 +200,9 @@ uscis_policy_manual.html
     → data/uscis_policy_manual/    (494 files, 48 stubs)
     → clean_kb.py
     → data/uscis_policy_manual_clean/  (446 files)
-    → [FUTURE] src/chunking.py
-    → [FUTURE] src/bedrock_utils.py (Titan embed)
-    → [FUTURE] src/opensearch_utils.py (bulk index)
+    → src/chunking.py (via worker on ingest)
+    → src/bedrock_utils.py (Titan embed)
+    → src/opensearch_utils.py (index + k-NN)
 ```
 
 **`parse_uscis.py`**: Depth-based BeautifulSoup traversal of USCIS HTML. Uses `markdownify` for conversion. Creates 3-level directory hierarchy (volume/part/chapter). Stub chapters get `_No content._` sentinel.
@@ -237,16 +232,16 @@ uscis_policy_manual.html
 
 ---
 
-### `src/` — Future Production Modules (Phase 2-3)
+### `src/` — Shared ingestion + RAG helpers
 
-All **skeleton/empty stubs**. Nothing here runs yet.
+Imported by [`worker.py`](../worker.py) (after `dotenv.load_dotenv()`) and from `app.py` on `POST /ask` (after env is set). Clients (`S3_CLIENT`, `BEDROCK_RUNTIME`, `OPENSEARCH_HTTP_AUTH`) are created at module import — **entrypoints must load `.env` before importing `src.*`**.
 
-| File | Intended purpose | Current state |
-|------|-----------------|---------------|
-| `bedrock_utils.py` | Titan embed + Claude generate wrappers | Constants only, no functions |
-| `chunking.py` | `MarkdownHeaderTextSplitter` → `RecursiveCharacterTextSplitter` pipeline | Raises `NotImplementedError` |
-| `opensearch_utils.py` | Bulk index + k-NN query | **Empty file** |
-| `s3_utils.py` | Upload, presigned URLs, CORS config | **Empty file** |
+| File | Role |
+|------|------|
+| `chunking.py` | `chunk_document(text)` — `MarkdownHeaderTextSplitter` + `RecursiveCharacterTextSplitter` |
+| `s3_utils.py` | `S3_CLIENT`, `download_object_text(bucket, key)` |
+| `opensearch_utils.py` | `OPENSEARCH_HTTP_AUTH`, `send_doc_to_opensearch(...)`, `knn_search_top_chunks(...)` |
+| `bedrock_utils.py` | `load_opensearch_vector_spec`, `embed_text_for_titan`, `invoke_claude`, `run_ask` |
 
 ---
 
@@ -266,8 +261,8 @@ All **skeleton/empty stubs**. Nothing here runs yet.
 1. **`RAW_ROOT`/`CLEAN_ROOT` hardcoded** in `app.py` — breaks on EC2
 2. **`chunk_id` vs `chunk_index`** — OpenSearch schema uses `chunk_id`, CLAUDE.md says `chunk_index`. Inconsistency to resolve before first indexing run
 3. **`check_aws.py` and `worker.py` still trust `OS_HOST`** — unlike `create_index.py`, they are still vulnerable to stale endpoints after collection recreation
-4. **`innerproduct` requires normalized vectors** — Titan embeddings use `normalize: true`; dimension comes from live `GET /_mapping` via [`embedding_config.py`](../embedding_config.py)
-5. **Legacy `src/` stubs** — real chunking/embed/query live in `worker.py` / `rag_query.py`, not `src/chunking.py`
+4. **`innerproduct` requires normalized vectors** — Titan embeddings use `normalize: true`; dimension comes from live `GET /_mapping` via [`src/bedrock_utils.py`](../src/bedrock_utils.py)
+5. **`src/` import order** — modules read `os.environ` at import; run `dotenv.load_dotenv()` first in `worker.py` / `scripts/check_aws.py`
 6. **AWS Account ID exposed** in `opensearch/index_schema.json` — IAM ARNs contain `538134613779`
 7. **tiktoken ≠ Titan tokenizer** — `cl100k_base` is an approximation; exact Titan token counts may differ
 8. **`analyze_kb.py` hardcodes `"48 files"`** in rendered report — will be wrong if corpus changes
@@ -294,13 +289,13 @@ python scripts/analyze_kb.py
 python scripts/create_index.py
 ```
 
-**Chunking:** Implemented in [`worker.py`](../worker.py) (`MarkdownHeaderTextSplitter` + `RecursiveCharacterTextSplitter`); `src/chunking.py` is a legacy stub.
+**Chunking:** [`src/chunking.py`](../src/chunking.py) (`MarkdownHeaderTextSplitter` + `RecursiveCharacterTextSplitter`); called from [`worker.py`](../worker.py).
 
 **To debug the SQS worker:**
 → Run `worker.py` and make sure the queue contains only S3 `ObjectCreated` event messages
 → Run **only one** `worker.py` process per queue (a stray background worker + the debugger will compete: one looks idle while the other processes messages)
 
-**RAG query:** [`rag_query.py`](../rag_query.py) + [`embedding_config.py`](../embedding_config.py); `POST /ask` on [`app.py`](../app.py). Claude system prompt: context-only, refuse when not confident. Ensure the index has chunks (run worker after upload).
+**RAG query:** [`src/bedrock_utils.py`](../src/bedrock_utils.py) (`run_ask`); `POST /ask` on [`app.py`](../app.py). Claude system prompt: context-only, refuse when not confident. Ensure the index has chunks (run worker after upload).
 
 **To deploy to EC2:**
 1. Fix hardcoded paths in `app.py` → env vars

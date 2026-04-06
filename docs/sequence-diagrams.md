@@ -92,7 +92,7 @@ sequenceDiagram
 
 ## 3. Ask (Question Answering)
 
-Titan request `dimensions` comes from the live OpenSearch mapping (`load_opensearch_vector_spec` in [`embedding_config.py`](../embedding_config.py)), same as ingest — not from env. `normalize: true` stays in code.
+Titan request `dimensions` comes from the live OpenSearch mapping (`load_opensearch_vector_spec` in [`src/bedrock_utils.py`](../src/bedrock_utils.py)), same as ingest — not from env. `normalize: true` stays in code.
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#4f46e5', 'primaryTextColor': '#fff', 'primaryBorderColor': '#3730a3', 'secondaryColor': '#0891b2', 'secondaryTextColor': '#fff', 'tertiaryColor': '#059669', 'tertiaryTextColor': '#fff', 'lineColor': '#6b7280', 'textColor': '#111827', 'noteBkgColor': '#fef9c3', 'noteTextColor': '#713f12', 'activationBkgColor': '#e0e7ff', 'activationBorderColor': '#4f46e5', 'loopTextColor': '#4f46e5', 'labelBoxBkgColor': '#f0fdf4', 'labelBoxBorderColor': '#059669', 'labelTextColor': '#065f46'}}}%%

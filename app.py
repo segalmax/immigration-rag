@@ -442,7 +442,7 @@ def health():
 
 @app.route("/ask", methods=["GET", "POST"])
 def ask():
-    import rag_query
+    import src.bedrock_utils
 
     if flask.request.method == "GET":
         return flask.render_template("ask.html")
@@ -453,7 +453,7 @@ def ask():
     if not question:
         return flask.jsonify({"error": "question is required"}), 400
     try:
-        answer_md, sources = rag_query.run_ask(question)
+        answer_md, sources = src.bedrock_utils.run_ask(question)
     except LookupError as e:
         return flask.jsonify({"error": str(e)}), 502
     except Exception as e:
