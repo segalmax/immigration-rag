@@ -19,6 +19,8 @@ KNN_TOP_K = 5
 
 _bedrock = None
 _os_auth = None
+
+
 def bedrock_runtime():
     global _bedrock
     if _bedrock is None:
