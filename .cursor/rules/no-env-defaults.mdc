@@ -1,5 +1,5 @@
 ---
-description: Forbid default values in environment variable lookups — fail fast if config is missing
+description: 
 globs: **/*.py
 alwaysApply: false
 ---

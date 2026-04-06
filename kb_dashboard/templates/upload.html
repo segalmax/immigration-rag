@@ -22,14 +22,16 @@
       </select>
     </div>
 
-    <!-- Drop zone -->
+    <!-- Drop zone: keep #file-input out of innerHTML updates so one stable node + one change listener -->
     <div id="drop-zone"
          class="border-2 border-dashed border-gray-200 rounded-xl p-10 text-center cursor-pointer
                 hover:border-indigo-300 transition-colors">
-      <p class="text-5xl mb-3">📤</p>
-      <p class="text-gray-600 font-medium">Click to select a file</p>
-      <p class="text-xs text-gray-400 mt-1">Markdown files only (.md)</p>
-      <input id="file-input" type="file" accept=".md" class="hidden">
+      <div id="drop-zone-ui">
+        <p class="text-5xl mb-3">📤</p>
+        <p class="text-gray-600 font-medium">Click to select a file</p>
+        <p class="text-xs text-gray-400 mt-1">Markdown files only (.md)</p>
+      </div>
+      <input id="file-input" type="file" accept=".md" class="hidden" aria-label="Choose markdown file">
     </div>
 
     <!-- USCIS header preview (shown only for USCIS category + file selected) -->
@@ -68,6 +70,7 @@
 <script>
 const fileInput      = document.getElementById('file-input');
 const dropZone       = document.getElementById('drop-zone');
+const dropZoneUi     = document.getElementById('drop-zone-ui');
 const uploadBtn      = document.getElementById('upload-btn');
 const statusEl       = document.getElementById('upload-status');
 const fileListEl     = document.getElementById('file-list');
@@ -92,12 +95,10 @@ categorySelect.addEventListener('change', () => { if (selectedFile) updatePrevie
 
 function handleFile(file) {
   selectedFile = file;
-  dropZone.innerHTML = `
+  dropZoneUi.innerHTML = `
     <p class="text-5xl mb-3">📄</p>
     <p class="font-semibold text-gray-800">${file.name}</p>
-    <p class="text-xs text-gray-400 mt-1">${(file.size / 1024).toFixed(1)} KB · ready to upload</p>
-    <input id="file-input" type="file" accept=".md" class="hidden">`;
-  document.getElementById('file-input').addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+    <p class="text-xs text-gray-400 mt-1">${(file.size / 1024).toFixed(1)} KB · ready to upload</p>`;
   const reader = new FileReader();
   reader.onload = e => { parseHeaders(e.target.result); updatePreview(); };
   reader.readAsText(file);
@@ -163,12 +164,11 @@ uploadBtn.addEventListener('click', async () => {
   selectedFile = null;
   parsedHeaders = { h1: '', h2: '', h3: '' };
   uscisPreview.classList.add('hidden');
-  dropZone.innerHTML = `
+  dropZoneUi.innerHTML = `
     <p class="text-5xl mb-3">📤</p>
     <p class="text-gray-600 font-medium">Click to select a file</p>
-    <p class="text-xs text-gray-400 mt-1">Markdown files only (.md)</p>
-    <input id="file-input" type="file" accept=".md" class="hidden">`;
-  document.getElementById('file-input').addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+    <p class="text-xs text-gray-400 mt-1">Markdown files only (.md)</p>`;
+  fileInput.value = '';
   uploadBtn.disabled = true;
   loadFiles();
 });

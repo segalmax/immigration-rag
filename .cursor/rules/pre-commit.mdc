@@ -1,6 +1,5 @@
 ---
-description:  pre-commit sync Diagrams+docs+preferences
-globs:
+description: 
 alwaysApply: true
 ---
 

@@ -13,7 +13,7 @@
         "PORT": "5051"
       },
       "console": "integratedTerminal",
-      "justMyCode": false
+      "justMyCode": true
     },
     {
       "name": "Debug Worker",
@@ -24,7 +24,7 @@
       "cwd": "${workspaceFolder}",
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal",
-      "justMyCode": false
+      "justMyCode": true
     }
   ],
   "compounds": [

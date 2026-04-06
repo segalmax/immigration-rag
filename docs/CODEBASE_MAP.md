@@ -293,6 +293,7 @@ python scripts/create_index.py
 
 **To debug the SQS worker:**
 → Run `worker.py` and make sure the queue contains only S3 `ObjectCreated` event messages
+→ Run **only one** `worker.py` process per queue (a stray background worker + the debugger will compete: one looks idle while the other processes messages)
 
 **To implement the RAG query endpoint:**
 → Replace the stub `POST /ask` route in `app.py` using `src/opensearch_utils.py` + `src/bedrock_utils.py`
