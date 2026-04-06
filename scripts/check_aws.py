@@ -4,12 +4,18 @@ Connectivity check: S3, SQS, OpenSearch, Bedrock Claude, Bedrock Titan v2.
 Reads config from .env (or env vars already set in the environment).
 
 Usage:
-    python check_aws.py
+    python scripts/check_aws.py   (from project root)
 """
 import json
 import os
+import pathlib
+import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+
 import dotenv
 import boto3
+import embedding_config
 import requests
 import requests_aws4auth
 
@@ -61,9 +67,14 @@ def check_claude():
 
 
 def check_titan():
+    embedding_config.load_opensearch_vector_spec(OS_ENDPOINT, OS_INDEX, _aoss_auth())
     client = boto3.client("bedrock-runtime", region_name=REGION)
-    out = json.loads(client.invoke_model(modelId=TITAN, body=json.dumps({"inputText": "test"}))["body"].read())
-    return f"embedding dim={len(out['embedding'])}"
+    body = embedding_config.titan_embed_invoke_body_json("test")
+    out = json.loads(client.invoke_model(modelId=TITAN, body=body)["body"].read())
+    got = len(out["embedding"])
+    want = embedding_config.embedding_dimension()
+    assert got == want, f"Titan embedding dim {got} != index mapping {want}"
+    return f"embedding dim={got} (from OpenSearch _mapping)"
 
 
 def main():

@@ -12,6 +12,7 @@ import urllib.parse
 
 import boto3
 import dotenv
+import embedding_config
 import langchain_text_splitters
 import requests
 import requests_aws4auth
@@ -187,8 +188,8 @@ def build_doc(chunk, meta: dict, chunk_index: int) -> dict:
     }
 
 
-def embed_text(text: str) -> list:
-    body = json.dumps({"inputText": text, "dimensions": 1024, "normalize": True})
+def embed_text_for_titan(text: str) -> list:
+    body = embedding_config.titan_embed_invoke_body_json(text)
     response = bedrock_client().invoke_model(
         body=body,
         modelId=TITAN_MODEL,
@@ -221,7 +222,7 @@ def process_message(msg: dict) -> None:
 
     for index, chunk in enumerate(chunks):
         doc = build_doc(chunk, meta, index)
-        doc["vector"] = embed_text(chunk.page_content)
+        doc["vector"] = embed_text_for_titan(chunk.page_content)
         send_doc_to_opensearch(doc)
 
     delete_message(receipt)
@@ -229,6 +230,7 @@ def process_message(msg: dict) -> None:
 
 
 def run() -> None:
+    embedding_config.load_opensearch_vector_spec(OS_ENDPOINT, OS_INDEX, os_auth())
     print(f"Worker started - polling {SQS_URL}")
     while True:
         messages = poll_sqs()

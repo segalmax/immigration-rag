@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Ask – USCIS KB{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-6 py-10 space-y-6">
+
+  <div>
+    <h1 class="text-2xl font-bold text-gray-900">Ask the policy manual</h1>
+    <p class="text-sm text-gray-500 mt-1">Questions are embedded with Titan, matched in OpenSearch (k-NN), then answered with Claude using retrieved chunks only.</p>
+  </div>
+
+  <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+    <label for="q" class="block text-sm font-medium text-gray-700">Question</label>
+    <textarea id="q" rows="4" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" placeholder="e.g. What is a conditional permanent resident?"></textarea>
+    <button type="button" id="submit-btn"
+            class="bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed">
+      Ask
+    </button>
+  </div>
+
+  <div id="status" class="hidden text-sm"></div>
+  <div id="err" class="hidden rounded-lg border border-red-200 bg-red-50 text-red-800 px-4 py-3 text-sm whitespace-pre-wrap"></div>
+
+  <div id="answer-box" class="hidden bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+    <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Answer</h2>
+    <div id="answer-html" class="prose max-w-none text-gray-800"></div>
+  </div>
+
+  <div id="sources-box" class="hidden bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+    <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Sources</h2>
+    <ul id="sources-list" class="space-y-3 text-sm"></ul>
+  </div>
+</div>
+
+<script>
+(function() {
+  const q = document.getElementById('q');
+  const btn = document.getElementById('submit-btn');
+  const status = document.getElementById('status');
+  const err = document.getElementById('err');
+  const answerBox = document.getElementById('answer-box');
+  const answerHtml = document.getElementById('answer-html');
+  const sourcesBox = document.getElementById('sources-box');
+  const sourcesList = document.getElementById('sources-list');
+
+  function showError(msg) {
+    err.textContent = msg;
+    err.classList.remove('hidden');
+    answerBox.classList.add('hidden');
+    sourcesBox.classList.add('hidden');
+  }
+  function clearError() {
+    err.classList.add('hidden');
+    err.textContent = '';
+  }
+
+  btn.addEventListener('click', function() {
+    const question = q.value.trim();
+    clearError();
+    answerBox.classList.add('hidden');
+    sourcesBox.classList.add('hidden');
+    if (!question) {
+      showError('Enter a question.');
+      return;
+    }
+    btn.disabled = true;
+    status.textContent = 'Searching and generating…';
+    status.classList.remove('hidden');
+
+    fetch('/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: question }),
+    })
+      .then(function(r) {
+        return r.json().then(function(data) {
+          return { ok: r.ok, status: r.status, data: data };
+        });
+      })
+      .then(function(res) {
+        status.classList.add('hidden');
+        btn.disabled = false;
+        if (!res.ok) {
+          showError(res.data.error || ('HTTP ' + res.status));
+          return;
+        }
+        answerHtml.innerHTML = res.data.answer_html || '';
+        answerBox.classList.remove('hidden');
+        sourcesList.innerHTML = '';
+        (res.data.sources || []).forEach(function(s, i) {
+          const li = document.createElement('li');
+          li.className = 'border-l-2 border-indigo-200 pl-3';
+          const url = s.source_url ? '<a href="' + s.source_url.replace(/"/g, '&quot;') + '" class="text-indigo-600 hover:underline break-all" target="_blank" rel="noopener">' + s.source_url + '</a>' : '—';
+          li.innerHTML = '<div class="font-medium text-gray-700">' + (i + 1) + '. ' + (s.s3_key || '') + '</div>' +
+            '<div class="text-xs text-gray-500 mt-1">' + url + '</div>' +
+            '<p class="text-gray-600 mt-1">' + (s.snippet || '').replace(/</g, '&lt;') + '</p>';
+          sourcesList.appendChild(li);
+        });
+        sourcesBox.classList.toggle('hidden', !res.data.sources || res.data.sources.length === 0);
+      })
+      .catch(function(e) {
+        status.classList.add('hidden');
+        btn.disabled = false;
+        showError(String(e));
+      });
+  });
+})();
+</script>
+{% endblock %}

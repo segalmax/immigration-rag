@@ -440,9 +440,26 @@ def health():
     return flask.jsonify({"status": "ok"})
 
 
-@app.route("/ask", methods=["POST"])
+@app.route("/ask", methods=["GET", "POST"])
 def ask():
-    return flask.jsonify({"error": "Not implemented yet"}), 501
+    import rag_query
+
+    if flask.request.method == "GET":
+        return flask.render_template("ask.html")
+    body = flask.request.get_json(silent=True)
+    if body is None:
+        return flask.jsonify({"error": "Expected JSON body"}), 400
+    question = (body.get("question") or "").strip()
+    if not question:
+        return flask.jsonify({"error": "question is required"}), 400
+    try:
+        answer_md, sources = rag_query.run_ask(question)
+    except LookupError as e:
+        return flask.jsonify({"error": str(e)}), 502
+    except Exception as e:
+        return flask.jsonify({"error": str(e)}), 500
+    answer_html = md_lib.markdown(answer_md, extensions=["tables", "fenced_code"])
+    return flask.jsonify({"answer": answer_md, "answer_html": answer_html, "sources": sources})
 
 
 @app.route("/")
@@ -629,4 +646,6 @@ def s3_search():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=int(os.environ["PORT"]))
+    # APP_RELOADER=0 disables Werkzeug reloader (e.g. if debugpy child process misbehaves); otherwise reload on code change.
+    _use_reloader = os.environ.get("APP_RELOADER") != "0"
+    app.run(debug=True, host="0.0.0.0", port=int(os.environ["PORT"]), use_reloader=_use_reloader)

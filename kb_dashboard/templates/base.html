@@ -55,6 +55,10 @@
                                {% if request.path.startswith('/browse') and not request.path.startswith('/s3') %}!text-white underline underline-offset-4{% endif %}">
         Browse
       </a>
+      <a href="/ask" class="text-indigo-200 hover:text-white text-sm font-medium transition
+                            {% if request.path == '/ask' %}!text-white underline underline-offset-4{% endif %}">
+        Ask
+      </a>
 
       <span class="text-indigo-500 opacity-40 select-none">|</span>
 

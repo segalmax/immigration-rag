@@ -21,12 +21,13 @@ def main():
     assert r.status_code == 200, f"/health returned {r.status_code}"
     print("✅ /health OK")
 
-    # /ask
-    r = requests.post(f"{base}/ask", json={"question": "What is USCIS?"}, timeout=10)
-    # 501 = "Not Implemented" (acceptable for /ask if backend is stubbed)
-    assert r.status_code in (200, 501), f"/ask returned {r.status_code}"
-    print(f"✅ /ask OK  (status={r.status_code})")
-    print("   response:", r.json())
+    # /ask (needs AWS + indexed chunks)
+    r = requests.post(f"{base}/ask", json={"question": "What is USCIS?"}, timeout=120)
+    assert r.status_code == 200, f"/ask returned {r.status_code}: {r.text}"
+    data = r.json()
+    assert "answer" in data and "sources" in data, f"unexpected JSON: {data!r}"
+    print("✅ /ask OK")
+    print("   answer preview:", (data.get("answer") or "")[:120], "...")
 
     print("\nSmoke test passed.")
 

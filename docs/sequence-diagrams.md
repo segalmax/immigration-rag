@@ -53,60 +53,7 @@ sequenceDiagram
     W->>SQS: delete_message(receipt_handle)
 ```
 
-## 2a. Dashboard Browsing — Local SPA (current)
-
-All files are read eagerly on first request and held in a module-level `_cache` dict for the lifetime of the Flask process. The browse page is a **single-page application**: the sidebar is permanent, and chapter content loads into the right pane via `fetch` — no page reloads. Full-text content search is also supported via a `/search` endpoint.
-
-```mermaid
-%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#4f46e5', 'primaryTextColor': '#fff', 'primaryBorderColor': '#3730a3', 'secondaryColor': '#0891b2', 'secondaryTextColor': '#fff', 'tertiaryColor': '#059669', 'tertiaryTextColor': '#fff', 'lineColor': '#6b7280', 'textColor': '#111827', 'noteBkgColor': '#fef9c3', 'noteTextColor': '#713f12', 'activationBkgColor': '#e0e7ff', 'activationBorderColor': '#4f46e5', 'loopTextColor': '#4f46e5', 'labelBoxBkgColor': '#f0fdf4', 'labelBoxBorderColor': '#059669', 'labelTextColor': '#065f46'}}}%%
-sequenceDiagram
-    participant C as Browser
-    participant F as Flask App
-    participant Cache as _cache
-    participant D as Local Disk
-
-    Note over F,Cache: First request only — subsequent requests skip disk
-    F->>D: rglob(*.md) on raw + clean roots
-    D-->>F: 494 raw + 446 clean files (paths + full text)
-    F->>F: compute words, tokens, footnotes per file
-    F->>F: build volume->part->chapter tree, charts, Tabulator JSON
-    F->>Cache: store everything in _cache dict
-
-    Note over F,Cache: All subsequent requests — cache hit, no disk I/O
-    C->>F: GET /
-    F->>Cache: load_corpus() hit
-    Cache-->>F: chapter_rows[], charts, summary stats
-    F-->>C: html (stat cards + Plotly charts + Tabulator JSON baked in)
-    Note over C: Tabulator renders 446 rows, headerFilter on Part/Chapter columns (JS only)
-
-    C->>F: GET /browse
-    F->>Cache: load_corpus() hit
-    Cache-->>F: volume->part->chapter tree
-    F-->>C: html (full sidebar tree baked in, single URL never changes)
-
-    Note over C: User clicks a chapter in the sidebar
-    C->>F: GET /content/volume/part/chapter.md
-    F->>Cache: look up file record by path
-    Cache-->>F: file record {text, words, tokens, footnotes}
-    F->>F: render markdown to HTML fragment
-    F-->>C: html fragment (breadcrumb + badges + rendered markdown)
-    Note over C: JS injects fragment into right pane, sidebar unchanged, no reload
-
-    Note over C: User types in search box (debounced 300ms)
-    C->>F: GET /search?q=asylum
-    F->>Cache: scan all_files[] for substring match
-    Cache-->>F: results [{path, volume, part, chapter, snippet}] capped at 100
-    F-->>C: JSON results
-    Note over C: JS filters sidebar to matching chapters only
-    Note over C: JS renders result cards with highlighted snippets
-
-    Note over C: User clicks a result card
-    C->>F: GET /content/path
-    F-->>C: html fragment
-    Note over C: JS injects fragment, sidebar filter stays active
-```
-
-## 2b. Dashboard Browsing — S3 Production (future)
+## 2. Dashboard Browsing — S3 Production (future)
 
 Eager full-corpus scan is not viable against S3 (too slow, no tiktoken). Instead: the tree is built from a `ListObjectsV2` call; per-file stats (words, tokens, chunk count) come from OpenSearch metadata stored at ingest time. Chapter-name filtering stays client-side. Full-text content search goes to OpenSearch.
 
@@ -145,6 +92,8 @@ sequenceDiagram
 
 ## 3. Ask (Question Answering)
 
+Titan request `dimensions` comes from the live OpenSearch mapping (`load_opensearch_vector_spec` in [`embedding_config.py`](../embedding_config.py)), same as ingest — not from env. `normalize: true` stays in code.
+
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#4f46e5', 'primaryTextColor': '#fff', 'primaryBorderColor': '#3730a3', 'secondaryColor': '#0891b2', 'secondaryTextColor': '#fff', 'tertiaryColor': '#059669', 'tertiaryTextColor': '#fff', 'lineColor': '#6b7280', 'textColor': '#111827', 'noteBkgColor': '#fef9c3', 'noteTextColor': '#713f12', 'activationBkgColor': '#e0e7ff', 'activationBorderColor': '#4f46e5', 'loopTextColor': '#4f46e5', 'labelBoxBkgColor': '#f0fdf4', 'labelBoxBorderColor': '#059669', 'labelTextColor': '#065f46'}}}%%
 sequenceDiagram
@@ -154,16 +103,16 @@ sequenceDiagram
     participant OS as OpenSearch
     participant CL as Claude on Bedrock
 
-    C->>F: POST /v1/ask {question}
+    C->>F: POST /ask {question}
 
-    F->>T: embed question
+    F->>T: embed question (dimensions from prior GET _mapping)
     T-->>F: question vector
 
-    F->>OS: knn search (question vector, k=5)
+    F->>OS: knn search (question vector, k=5, innerproduct)
     OS-->>F: top-k chunks + source metadata
 
     F->>CL: prompt (question + chunks as context)
     CL-->>F: answer text
 
-    F-->>C: {answer, sources}
+    F-->>C: {answer, answer_html, sources}
 ```

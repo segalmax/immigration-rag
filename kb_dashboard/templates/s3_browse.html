@@ -191,7 +191,6 @@ function runSearch(q) {
         return `<div class="bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-3 space-y-1">
           <div class="flex items-center justify-between gap-2">
             <span class="text-xs text-gray-400">${r.volume} › ${r.part}</span>
-            <a href="#" data-path="${r.path}" class="text-xs text-indigo-500 hover:underline flex-shrink-0">open →</a>
           </div>
           <a href="#" data-path="${r.path}" class="text-sm font-semibold text-indigo-700 hover:underline block">${r.chapter}</a>
           <p class="text-xs text-gray-500 font-mono leading-relaxed">${highlight(r.snippet, q)}</p>

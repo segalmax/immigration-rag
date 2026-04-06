@@ -316,13 +316,6 @@
         headerTooltip: "Count of **[n]** style footnote references in the raw file" },
       { title: "Sections",  field: "sections", width: 80,  sorter: "number",
         headerTooltip: "Number of ## level headings (potential split points for chunking)" },
-      { title: "View",      field: "path",     width: 60,  headerSort: false,
-        headerTooltip: "Open the file in the Browse view",
-        formatter: function(cell) {
-          return `<a href="/browse/${cell.getValue()}" class="text-indigo-500 hover:underline text-xs">open</a>`;
-        },
-        formatterParams: { allowHtml: true }
-      },
     ],
   });
 

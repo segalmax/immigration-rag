@@ -176,11 +176,6 @@
       { title: "Tokens",   field: "tokens",   width: 90, sorter: "number",
         formatter: function(cell){ return cell.getValue().toLocaleString(); } },
       { title: "Sections", field: "sections", width: 80, sorter: "number" },
-      { title: "View",     field: "path",     width: 60, headerSort: false,
-        formatter: function(cell) {
-          return `<a href="/s3/browse?path=${cell.getValue()}" class="text-indigo-500 hover:underline text-xs">open</a>`;
-        }, formatterParams: { allowHtml: true }
-      },
     ],
   });
   document.getElementById("group-select").addEventListener("change", function () {

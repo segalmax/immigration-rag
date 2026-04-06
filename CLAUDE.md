@@ -41,7 +41,7 @@ alwaysApply: true
 
 ## Diagrams
 - Mermaid preferred. Nest sub-components in parent boundaries.
-- Number steps (`1`, `2`, `3.a`, `3.b` for parallel). Meaningful shapes (cylinder=DB, hexagon=queue, diamond=decision).
+- Number steps (`1`, `2`, `3.a`, `3.b` for parallel). Meaningful best conventional shapes.
 - Consistent colors per category. Generous spacing, no crossing arrows.
 
 ---
@@ -58,7 +58,7 @@ alwaysApply: true
 - **Educational AWS class project** — instructor requires Flask.
 - **Goal:** RAG app — USCIS Policy Manual → S3 → SQS → EC2 worker → OpenSearch (k-NN) → Claude via Bedrock.
 - **Corpus:** `uscis_policy_manual/` (raw 494) · `uscis_policy_manual_clean/` (clean 446).
-- `app.py` is now the real Flask app for local browsing, uploads, and future `/ask`.
+- `app.py` serves the KB dashboard, uploads, and **`/ask`** (RAG: Titan embed → OpenSearch k-NN → Claude). Titan `dimensions` matches the live index: [`embedding_config.py`](embedding_config.py) loads it from `GET /_mapping` once per process (`load_opensearch_vector_spec`), not from env or a hardcoded size.
 - **Two upload tracks:** USCIS (category=uscis, S3 key from H1/H2 headers, rich metadata) · Other (category=other, flat `uploads/` prefix, minimal metadata).
 - **SQS trigger:** S3 `ObjectCreated` event sends the uploaded object to SQS after browser PUT completes.
 - **Chunking:** `MarkdownHeaderTextSplitter` first (section_path metadata per chunk) → `RecursiveCharacterTextSplitter` only for chunks >2000 chars.
@@ -69,7 +69,7 @@ alwaysApply: true
 
 ## Codebase Overview
 
-RAG pipeline on USCIS Policy Manual (446 clean `.md` files). `app.py` is the main Flask app, and `worker.py` is the ingestion worker. The query route is still not implemented.
+RAG pipeline on USCIS Policy Manual (446 clean `.md` files). `app.py` is the main Flask app (including `POST /ask`), and `worker.py` is the ingestion worker. Shared embedding config: [`embedding_config.py`](embedding_config.py).
 
 **Stack**: Flask · Tailwind CDN · Tabulator.js · Plotly · Bedrock (Titan + Claude) · OpenSearch Serverless · S3 · SQS · EC2 · systemd
 
