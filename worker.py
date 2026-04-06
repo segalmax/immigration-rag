@@ -198,7 +198,7 @@ def embed_text(text: str) -> list:
     return json.loads(response["body"].read())["embedding"]
 
 
-def index_doc(doc: dict) -> None:
+def send_doc_to_opensearch(doc: dict) -> None:
     response = requests.post(
         f"{OS_ENDPOINT}/{OS_INDEX}/_doc",
         auth=os_auth(),
@@ -222,7 +222,7 @@ def process_message(msg: dict) -> None:
     for index, chunk in enumerate(chunks):
         doc = build_doc(chunk, meta, index)
         doc["vector"] = embed_text(chunk.page_content)
-        index_doc(doc)
+        send_doc_to_opensearch(doc)
 
     delete_message(receipt)
     print(f"  -> indexed {len(chunks)} chunks")
