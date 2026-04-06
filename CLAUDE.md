@@ -58,12 +58,12 @@ alwaysApply: true
 - **Educational AWS class project** — instructor requires Flask.
 - **Goal:** RAG app — USCIS Policy Manual → S3 → SQS → EC2 worker → OpenSearch (k-NN) → Claude via Bedrock.
 - **Corpus:** `uscis_policy_manual/` (raw 494) · `uscis_policy_manual_clean/` (clean 446).
-- `app.py` serves the KB dashboard, uploads, and **`/ask`** (RAG: Titan embed → OpenSearch k-NN → Claude). Titan `dimensions` matches the live index: [`src/bedrock_utils.py`](src/bedrock_utils.py) loads it from `GET /_mapping` once per process (`load_opensearch_vector_spec`), not from env or a hardcoded size.
+- `app.py` serves the KB dashboard, uploads, and **`/ask`** (RAG: Titan embed → OpenSearch k-NN → Claude). **`src.bedrock_utils` is imported only on `POST /ask`** (GET serves `ask.html` without Bedrock/OpenSearch). Titan `dimensions` matches the live index: [`src/bedrock_utils.py`](src/bedrock_utils.py) loads it from `GET /_mapping` once per process (`load_opensearch_vector_spec`), not from env or a hardcoded size.
 - **`/ask` answers:** [`src/bedrock_utils.py`](src/bedrock_utils.py) (`run_ask`) system prompt is **retrieval-grounded only** — refuse when context is insufficient or confidence is low; do not answer from general model knowledge.
 - **Two upload tracks:** USCIS (category=uscis, S3 key from H1/H2 headers, rich metadata) · Other (category=other, flat `uploads/` prefix, minimal metadata).
 - **SQS trigger:** S3 `ObjectCreated` event sends the uploaded object to SQS after browser PUT completes.
 - **Chunking:** `MarkdownHeaderTextSplitter` first (section_path metadata per chunk) → `RecursiveCharacterTextSplitter` only for chunks >2000 chars.
-- **OpenSearch chunk fields:** `s3_key`, `category`, `volume`, `part`, `chapter`, `source_url`, `section_path[]`, `text`, `chunk_index`, `vector`.
+- **OpenSearch chunk fields (ingest):** worker documents include `s3_key`, `category`, `volume`, `part`, `chapter`, `source_url`, `section_path`, `text`, `chunk_index`, `vector`. [`opensearch/index_schema.json`](opensearch/index_schema.json) still declares `chunk_id` — align names with the worker before treating the mapping as canonical.
 - **S3 CORS:** must `put_bucket_cors` (AllowedMethods: PUT/GET/HEAD, AllowedOrigins: *) before browser presigned-URL uploads work.
 
 ---
@@ -84,4 +84,5 @@ For detailed architecture, see [docs/CODEBASE_MAP.md](docs/CODEBASE_MAP.md).
 - **Footnote gap:** `clean_kb.py` misses `[^ n]` / bare `[n]` — 4 files still noisy. Awaiting fix instruction.
 - **Token counts approximate:** `tiktoken cl100k_base` ≠ Titan tokenizer. Good enough proxy for now.
 - **Hardcoded paths** in `app.py` — must switch to env vars before EC2 deploy.
+- **`PORT` env** — `app.py` requires `os.environ["PORT"]` (no default); set in `.env` or shell.
 - **OpenSearch index** needs recreating with new schema before first worker run (`python scripts/create_index.py`).

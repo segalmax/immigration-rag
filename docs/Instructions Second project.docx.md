@@ -43,16 +43,21 @@ User question → Flask /ask → retrieves top‑k chunks from OpenSearch →
 
 ## 2) Project Repo Structure
 
+Generic class layout uses top-level `*_utils.py` files. **This repo** keeps shared code under `src/`:
+
 ```
-app.py          # Flask API
-worker.py       # SQS worker
-opensearch_utils.py
-bedrock_utils.py
-chunking.py
-s3_utils.py
+app.py
+worker.py
+src/
+  bedrock_utils.py   # Titan + Claude + OpenSearch vector spec + run_ask (RAG)
+  opensearch_utils.py
+  chunking.py
+  s3_utils.py
 requirements.txt
 scripts/
+opensearch/index_schema.json
 systemd/
+tests/
 ```
 
 ---
@@ -60,25 +65,25 @@ systemd/
 ## 3) Environment Variables
 
 ```
-AWS_REGION, S3_BUCKET, SQS_QUEUE_URL, OS_HOST, OS_INDEX, CLAUDE_MODEL_ID, TITAN_EMBED_MODEL
+PORT, AWS_REGION, S3_BUCKET, SQS_QUEUE_URL, OS_HOST, OS_INDEX, CLAUDE_MODEL_ID, TITAN_EMBED_MODEL
 ```
+
+(Optional: `APP_RELOADER=0` to disable Flask reloader when debugging.)
 
 ---
 
 ## 4) Dependencies
 
-```
-flask, boto3, requests, opensearch-py, python-dotenv
-```
+See [`requirements.txt`](../requirements.txt). Includes `flask`, `boto3`, `requests`, `requests-aws4auth`, `python-dotenv`, `langchain-text-splitters`, `pandas`, `plotly`, `tiktoken`, `markdown`, and parsing libs for the corpus scripts. (No `opensearch-py` — HTTP to OpenSearch Serverless via `requests` + SigV4.)
 
 ---
 
 ## 5) Utilities
 
-- `bedrock_utils.py` → embeddings + Claude chat
-- `opensearch_utils.py` → index, search
-- `chunking.py` → split text
-- `s3_utils.py` → download from S3
+- `src/bedrock_utils.py` → Titan embed, Claude invoke, `load_opensearch_vector_spec`, `run_ask`
+- `src/opensearch_utils.py` → SigV4 auth, index `_doc`, k-NN search HTTP
+- `src/chunking.py` → LangChain splitters
+- `src/s3_utils.py` → S3 download helper
 
 ---
 
@@ -90,14 +95,13 @@ Polls SQS, downloads S3 docs, extracts text (Textract optional), embeds + indexe
 
 ## 7) Flask API
 
-`/health` and `/ask` routes → retrieves docs, builds context, calls Claude.
+`/health`, dashboard and browse routes (local + `/s3/*` mirror), upload presign, **`/ask`** (POST JSON question → `src.bedrock_utils.run_ask`).
 
 ---
 
 ## 8) Scripts
 
-- `create_index.py`
-- `smoke_test.py`
+- `scripts/create_index.py`, `scripts/check_aws.py`, `scripts/smoke_test.py`, plus corpus pipeline scripts (`parse_uscis.py`, `clean_kb.py`, `analyze_kb.py`, etc.)
 
 ---
 

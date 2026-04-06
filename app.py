@@ -442,10 +442,10 @@ def health():
 
 @app.route("/ask", methods=["GET", "POST"])
 def ask():
-    import src.bedrock_utils
-
     if flask.request.method == "GET":
         return flask.render_template("ask.html")
+    import src.bedrock_utils
+
     body = flask.request.get_json(silent=True)
     if body is None:
         return flask.jsonify({"error": "Expected JSON body"}), 400
