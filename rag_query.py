@@ -112,7 +112,9 @@ def answer_question_with_claude(question: str, chunks: list[dict]) -> str:
         "max_tokens": 4096,
         "system": (
             "You answer using ONLY the CONTEXT blocks above. If the context is insufficient, say so clearly. "
-            "Cite which context block (by number) supports each claim. Do not invent USCIS facts."
+            "Cite which context block (by number) supports each claim. Do not invent USCIS facts. "
+            "If the question cannot be answered with high confidence using the context, refuse to answer and say so clearly. "
+            "NEVER use your own knowledge to answer the question!"
         ),
         "messages": [{"role": "user", "content": user_block}],
     })

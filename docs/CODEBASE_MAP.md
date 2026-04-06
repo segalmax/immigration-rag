@@ -300,7 +300,7 @@ python scripts/create_index.py
 → Run `worker.py` and make sure the queue contains only S3 `ObjectCreated` event messages
 → Run **only one** `worker.py` process per queue (a stray background worker + the debugger will compete: one looks idle while the other processes messages)
 
-**RAG query:** [`rag_query.py`](../rag_query.py) + [`embedding_config.py`](../embedding_config.py); `POST /ask` on [`app.py`](../app.py). Ensure the index has chunks (run worker after upload).
+**RAG query:** [`rag_query.py`](../rag_query.py) + [`embedding_config.py`](../embedding_config.py); `POST /ask` on [`app.py`](../app.py). Claude system prompt: context-only, refuse when not confident. Ensure the index has chunks (run worker after upload).
 
 **To deploy to EC2:**
 1. Fix hardcoded paths in `app.py` → env vars

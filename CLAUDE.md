@@ -59,6 +59,7 @@ alwaysApply: true
 - **Goal:** RAG app — USCIS Policy Manual → S3 → SQS → EC2 worker → OpenSearch (k-NN) → Claude via Bedrock.
 - **Corpus:** `uscis_policy_manual/` (raw 494) · `uscis_policy_manual_clean/` (clean 446).
 - `app.py` serves the KB dashboard, uploads, and **`/ask`** (RAG: Titan embed → OpenSearch k-NN → Claude). Titan `dimensions` matches the live index: [`embedding_config.py`](embedding_config.py) loads it from `GET /_mapping` once per process (`load_opensearch_vector_spec`), not from env or a hardcoded size.
+- **`/ask` answers:** [`rag_query.py`](rag_query.py) system prompt is **retrieval-grounded only** — refuse when context is insufficient or confidence is low; do not answer from general model knowledge.
 - **Two upload tracks:** USCIS (category=uscis, S3 key from H1/H2 headers, rich metadata) · Other (category=other, flat `uploads/` prefix, minimal metadata).
 - **SQS trigger:** S3 `ObjectCreated` event sends the uploaded object to SQS after browser PUT completes.
 - **Chunking:** `MarkdownHeaderTextSplitter` first (section_path metadata per chunk) → `RecursiveCharacterTextSplitter` only for chunks >2000 chars.
