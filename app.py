@@ -101,6 +101,47 @@ WORD_BUCKETS = ["< 100", "100–499", "500–1,999", "2,000–4,999", "5,000–7
 TOKEN_BUCKETS = ["< 512", "512–1K", "1K–2K", "2K–4K", "4K+"]
 
 
+def _empty_local_corpus_result(root: Path) -> dict:
+    banner = (
+        f"<p class='text-amber-700 p-4 rounded-lg border border-amber-200 bg-amber-50'>"
+        f"No <code>.md</code> files under <code>{root}</code>. "
+        f"Sync <code>data/uscis_policy_manual*</code> onto the server, or open the "
+        f"<a href='/s3/' class='underline font-medium'>S3-backed dashboard</a>.</p>"
+    )
+    z = {
+        "total": 0,
+        "clean": 0,
+        "stubs": 0,
+        "total_words": 0,
+        "mean_words": 0,
+        "median_words": 0,
+        "max_words": 0,
+        "total_tokens": 0,
+        "mean_tokens": 0,
+        "median_tokens": 0,
+        "max_tokens": 0,
+        "total_footnotes": 0,
+        "files_w_footnotes": 0,
+        "residual_footnotes": 0,
+        "oversized_count": 0,
+    }
+    return {
+        "summary": z,
+        "dist_word_chart": banner,
+        "dist_token_chart": "",
+        "vol_df": [],
+        "max_words": 1,
+        "max_tokens": 1,
+        "oversized": [],
+        "top_footnotes": [],
+        "stubs_list": [],
+        "footnote_gap": [],
+        "chapter_rows": [],
+        "tree": {},
+        "all_files": [],
+    }
+
+
 def _scan_corpus(root: Path, is_clean: bool) -> dict:
     rows = []
     for md_path in sorted(root.rglob("*.md")):
@@ -121,6 +162,9 @@ def _scan_corpus(root: Path, is_clean: bool) -> dict:
             "stub": stub,
             "text": text,
         })
+
+    if not rows:
+        return _empty_local_corpus_result(root)
 
     df = pd.DataFrame(rows)
     df["vol_label"] = df["volume"].apply(pretty_vol)

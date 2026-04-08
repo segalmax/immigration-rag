@@ -272,7 +272,7 @@ Imported by [`worker.py`](../worker.py) (after `dotenv.load_dotenv()`) and from 
 
 ## Gotchas
 
-1. **`RAW_ROOT`/`CLEAN_ROOT` hardcoded** in `app.py` — breaks on EC2
+1. **`RAW_ROOT`/`CLEAN_ROOT`** in `app.py` — relative to repo; if `data/` has no `.md` on EC2, `/` still loads (empty stats + banner); full local dashboard needs the corpus on disk or use `/s3/`
 2. **`chunk_id` (schema) vs `chunk_index` (worker)** — [`opensearch/index_schema.json`](../opensearch/index_schema.json) defines `chunk_id`; [`worker.py`](../worker.py) `build_doc` sends `chunk_index`. Align field names (and types) before treating the index as authoritative
 3. **`check_aws.py` and `worker.py` still trust `OS_HOST`** — unlike `create_index.py`, they are still vulnerable to stale endpoints after collection recreation
 4. **`innerproduct` requires normalized vectors** — Titan embeddings use `normalize: true`; dimension comes from live `GET /_mapping` via [`src/bedrock_utils.py`](../src/bedrock_utils.py)
@@ -280,7 +280,7 @@ Imported by [`worker.py`](../worker.py) (after `dotenv.load_dotenv()`) and from 
 6. **AWS Account ID exposed** in `opensearch/index_schema.json` — IAM ARNs contain `538134613779`
 7. **tiktoken ≠ Titan tokenizer** — `cl100k_base` is an approximation; exact Titan token counts may differ
 8. **`analyze_kb.py` hardcodes `"48 files"`** in rendered report — will be wrong if corpus changes
-9. **`systemd/` files are intentionally empty** — they must be rewritten when EC2 deployment starts
+9. **`systemd/`** — `rag-api.service` and `rag-worker@.service` target `/home/ubuntu/immigration-rag`; adjust paths if your clone dir differs
 
 ---
 
@@ -313,6 +313,6 @@ python scripts/create_index.py
 
 **To deploy to EC2:**
 1. Fix hardcoded paths in `app.py` → env vars
-2. Fill `.env` with real AWS values
+2. Fill `.env` with real AWS values — set **`OS_HOST`** to the **hostname only** (strip `https://`) from `batch-get-collection` → `collectionEndpoint` (wrong host → OpenSearch **403**)
 3. Copy `systemd/*.service` to `/etc/systemd/system/`, `daemon-reload`
 4. `systemctl enable --now rag-api rag-worker@1 rag-worker@2 rag-worker@3`
