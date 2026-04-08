@@ -6,7 +6,8 @@ After=network.target
 User=ubuntu
 WorkingDirectory=/home/ubuntu/immigration-rag
 EnvironmentFile=/home/ubuntu/immigration-rag/.env
-ExecStart=/home/ubuntu/immigration-rag/.venv/bin/gunicorn app:app --bind 0.0.0.0:5000 --workers 2
+# Single worker: in-memory _s3_cache / _cache in app.py are per process — 2 workers => two caches (stale / divergent S3 browse).
+ExecStart=/home/ubuntu/immigration-rag/.venv/bin/gunicorn app:app --bind 0.0.0.0:5000 --workers 1
 Restart=always
 RestartSec=5
 

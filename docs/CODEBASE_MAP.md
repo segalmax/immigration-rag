@@ -280,7 +280,7 @@ Imported by [`worker.py`](../worker.py) (after `dotenv.load_dotenv()`) and from 
 6. **AWS Account ID exposed** in `opensearch/index_schema.json` — IAM ARNs contain `538134613779`
 7. **tiktoken ≠ Titan tokenizer** — `cl100k_base` is an approximation; exact Titan token counts may differ
 8. **`analyze_kb.py` hardcodes `"48 files"`** in rendered report — will be wrong if corpus changes
-9. **`systemd/`** — `rag-api.service` and `rag-worker@.service` target `/home/ubuntu/immigration-rag`; adjust paths if your clone dir differs
+9. **`systemd/`** — `rag-api.service` and `rag-worker@.service` target `/home/ubuntu/immigration-rag`; adjust paths if your clone dir differs. **`rag-api` uses gunicorn `--workers 1`** because `app.py` keeps `_s3_cache` in memory (per process); more workers ⇒ inconsistent `/s3/browse` until you add shared cache or drop caching.
 
 ---
 

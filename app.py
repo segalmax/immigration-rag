@@ -5,6 +5,7 @@ Main Flask app for local browsing, uploads, and future RAG API routes.
 import json
 import os
 import re
+import threading
 from pathlib import Path
 
 import boto3
@@ -295,15 +296,18 @@ def _scan_corpus(root: Path, is_clean: bool) -> dict:
 
 _cache: dict = {}
 _s3_cache: dict = {}
+_cache_lock = threading.Lock()
+_s3_cache_lock = threading.Lock()
 
 
 def load_corpus() -> dict:
-    if not _cache:
-        clean = _scan_corpus(CLEAN_ROOT, is_clean=True)
-        raw = _scan_corpus(RAW_ROOT, is_clean=False)
-        _cache["clean"] = clean
-        _cache["raw_summary"] = raw["summary"]
-    return _cache
+    with _cache_lock:
+        if not _cache:
+            clean = _scan_corpus(CLEAN_ROOT, is_clean=True)
+            raw = _scan_corpus(RAW_ROOT, is_clean=False)
+            _cache["clean"] = clean
+            _cache["raw_summary"] = raw["summary"]
+        return _cache
 
 
 def _s3_client():
@@ -474,9 +478,10 @@ def _scan_s3_corpus() -> dict:
 
 
 def load_s3_corpus() -> dict:
-    if not _s3_cache:
-        _s3_cache.update(_scan_s3_corpus())
-    return _s3_cache
+    with _s3_cache_lock:
+        if not _s3_cache:
+            _s3_cache.update(_scan_s3_corpus())
+        return _s3_cache
 
 
 @app.route("/health")
