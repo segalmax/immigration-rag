@@ -20,6 +20,8 @@ The project has one main Flask app, `app.py`, which serves the KB dashboard, upl
 
 ## Architecture
 
+> For the full **deployment diagram** (EC2, nginx, systemd, IAM role, AWS services with labeled edges) see [DEPLOYMENT_DIAGRAM.md](DEPLOYMENT_DIAGRAM.md).
+
 ```mermaid
 flowchart TD
     subgraph Dev["Local Dev"]
