@@ -8,7 +8,7 @@ This project is your chance to bring **Retrieval-Augmented Generation (RAG)** to
 - Bedrock for:
   - Claude (chat/completions)
   - Titan Embeddings (text embeddings)
-- OpenSearch (managed domain) as the vector store (k‑NN)
+- OpenSearch **Serverless** as the vector store (k‑NN), configured via `opensearch/index_schema.json` + AWS APIs
 - S3 for document drop‑box (students upload files here)
 - SQS for event fan‑out from S3 to EC2 worker
 - Textract (optional) to extract text from PDFs/images

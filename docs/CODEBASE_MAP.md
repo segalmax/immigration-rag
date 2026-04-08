@@ -1,12 +1,12 @@
 ---
-last_mapped: 2026-04-06T00:00:00Z
+last_mapped: 2026-04-08T00:00:00Z
 total_files: ~45
 total_tokens: (approx)
 ---
 
 # Codebase Map — Immigration RAG Assistant
 
-> Last reviewed against the repo: 2026-04-06
+> Last reviewed against the repo: 2026-04-08
 
 ---
 
@@ -35,7 +35,7 @@ flowchart TD
         S3[("S3 Bucket\n$S3_BUCKET")]
         SQS{{"SQS Queue\n$SQS_QUEUE_URL"}}
         Worker["Worker\nworker.py"]
-        OS[("OpenSearch\nServerless\nimmig-col3")]
+        OS[("OpenSearch\nServerless\nsee OS_INDEX / index_schema")]
         Bedrock1["Bedrock\nTitan Embeddings\n1024-dim"]
 
         Browser -->|presigned PUT| S3
@@ -92,15 +92,14 @@ flowchart TD
 - [`.vscode/launch.json`](../.vscode/launch.json) exists for app and worker debugging.
 - `POST /ask` returns grounded answers (Titan embed → OpenSearch k-NN → Claude).
 
-**Not Done Yet**
+**Operational gaps (not blockers)**
 
-- Runtime paths in `app.py` are still hardcoded instead of env-driven.
-- `worker.py` still depends on `OS_HOST`, so collection recreation can still stale-break it.
-- Deployment to EC2 is not ready.
+- `worker.py` and `app.py` (via `src/`) still read **`OS_HOST` from env** — if you recreate the Serverless collection, run `batch-get-collection` and update `.env` (stale host → **403** on `/_mapping` / search).
+- Optional: env-driven `RAW_ROOT` / `CLEAN_ROOT` only if the corpus lives outside the repo tree.
 
-**Deployment Status**
+**Deployment (reference)**
 
-- `systemd/rag-api.service` — gunicorn + Flask (see [DEPLOYMENT_DIAGRAM.md](DEPLOYMENT_DIAGRAM.md)).
+- `systemd/rag-api.service` — gunicorn **`--workers 1`** + Flask (see [DEPLOYMENT_DIAGRAM.md](DEPLOYMENT_DIAGRAM.md)); paths target `/home/ubuntu/immigration-rag` — adjust if your clone dir differs.
 - `systemd/rag-worker@.service` — template for **three** SQS worker processes (`rag-worker@1` … `@3`); same `worker.py`, parallel queue consumers.
 
 ---
@@ -143,13 +142,13 @@ immigration-rag-claud-code-folder/
 │
 ├── opensearch/
 │   ├── index_schema.json         # k-NN index mapping + AOSS collection config
-│   └── opensearch_export.py      # Optional export helper (see file)
+│   └── opensearch_export.py      # CLI: AOSS provision / backup / restore / teardown (see script docstring)
 │
 ├── .vscode/
 │   └── launch.json               # Debug: Flask app + worker
 │
 ├── systemd/
-│   ├── rag-api.service           # gunicorn app:app on :5000
+│   ├── rag-api.service           # gunicorn app:app on :5000, --workers 1 (single _s3_cache)
 │   └── rag-worker@.service       # template: enable rag-worker@1 @2 @3 (three worker.py processes)
 │
 ├── tests/
@@ -195,10 +194,10 @@ immigration-rag-claud-code-folder/
 `word_count`, `token_count`, `footnote_count`, `residual_footnote_count`, `section_count`, `is_stub`, `vol_sort_key`, `pretty_vol`, `word_bucket`, `token_bucket`
 
 **Gotchas:**
-- `RAW_ROOT` and `CLEAN_ROOT` are **hardcoded** relative paths to `data/` — must be env vars before EC2 deploy
-- Entire corpus is loaded into `_cache` in memory on first request — fine locally, bad on a t2.micro
-- S3 scan reads every `.md` file body inline — slow for large buckets
-- Worker now expects native S3 event messages on SQS; any legacy custom queue messages should be drained before debugging
+- `RAW_ROOT` / `CLEAN_ROOT` are **relative to `app.py`** (`data/uscis_policy_manual*`). No local `.md` → `/` uses **empty dashboard + banner**; use **`/s3/`** or sync `data/` onto the host.
+- `load_corpus()` / `load_s3_corpus()` use **`_cache` / `_s3_cache`** (filled once per process under a **`threading.Lock`**). Gunicorn must stay **`--workers 1`** or `/s3/browse` can disagree across refreshes.
+- Local + S3 mirrors load **full file bodies** into memory — heavy on small instances / large buckets.
+- Worker expects S3 **`Records`**-style messages on SQS, or legacy JSON with top-level **`s3_key`** (see `s3_key_from_message` in [`worker.py`](../worker.py)).
 
 ---
 
@@ -238,8 +237,8 @@ uscis_policy_manual.html
 | `volume`, `part`, `chapter` | keyword | USCIS hierarchy |
 | `section_path` | keyword (see below) | Worker sends a **list** of header strings; align mapping with ingest if queries fail |
 | `text` | text | Chunk content |
-| `chunk_index` | (worker) | Present in documents built by [`worker.py`](../worker.py) — integer sequence per file |
-| `chunk_id` | integer | Declared in [`index_schema.json`](../opensearch/index_schema.json) — **name does not match** `chunk_index` until schema + worker agree |
+| `chunk_index` | long (live index) | Sent by [`worker.py`](../worker.py) `build_doc` — **not** listed in [`index_schema.json`](../opensearch/index_schema.json) `mapping.properties` (OpenSearch still indexes it dynamically). |
+| `chunk_id` | integer | Declared in `index_schema.json` only — **worker does not send it**; treat as legacy / unused until aligned with `chunk_index` |
 | `vector` | knn_vector | 1024-dim, faiss HNSW, fp16, innerproduct |
 
 **k-NN config**: `innerproduct` space type (requires L2-normalized vectors), `ef_search: 512`, 2 shards, 0 replicas.
@@ -254,7 +253,7 @@ Imported by [`worker.py`](../worker.py) (after `dotenv.load_dotenv()`) and from 
 |------|------|
 | `chunking.py` | `chunk_document(text)` — `MarkdownHeaderTextSplitter` + `RecursiveCharacterTextSplitter` |
 | `s3_utils.py` | `S3_CLIENT`, `download_object_text(bucket, key)` |
-| `opensearch_utils.py` | `OPENSEARCH_HTTP_AUTH`, `send_doc_to_opensearch(...)`, `knn_search_top_chunks(...)` |
+| `opensearch_utils.py` | `OPENSEARCH_HTTP_AUTH`, `send_doc_to_opensearch` (**POST** `/{index}/_doc` per chunk, not Bulk API), `knn_search_top_chunks` |
 | `bedrock_utils.py` | `load_opensearch_vector_spec`, `embed_text_for_titan`, `invoke_claude`, `run_ask` |
 
 ---
@@ -273,7 +272,7 @@ Imported by [`worker.py`](../worker.py) (after `dotenv.load_dotenv()`) and from 
 ## Gotchas
 
 1. **`RAW_ROOT`/`CLEAN_ROOT`** in `app.py` — relative to repo; if `data/` has no `.md` on EC2, `/` still loads (empty stats + banner); full local dashboard needs the corpus on disk or use `/s3/`
-2. **`chunk_id` (schema) vs `chunk_index` (worker)** — [`opensearch/index_schema.json`](../opensearch/index_schema.json) defines `chunk_id`; [`worker.py`](../worker.py) `build_doc` sends `chunk_index`. Align field names (and types) before treating the index as authoritative
+2. **`chunk_id` vs `chunk_index`** — schema file declares `chunk_id`; worker sends **`chunk_index` only**. Align or drop `chunk_id` from the schema when you want a single canonical field.
 3. **`check_aws.py` and `worker.py` still trust `OS_HOST`** — unlike `create_index.py`, they are still vulnerable to stale endpoints after collection recreation
 4. **`innerproduct` requires normalized vectors** — Titan embeddings use `normalize: true`; dimension comes from live `GET /_mapping` via [`src/bedrock_utils.py`](../src/bedrock_utils.py)
 5. **`src/` import order** — modules read `os.environ` at import; run `dotenv.load_dotenv()` first in `worker.py` / `scripts/check_aws.py`
@@ -312,7 +311,7 @@ python scripts/create_index.py
 **RAG query:** [`src/bedrock_utils.py`](../src/bedrock_utils.py) (`run_ask`); `POST /ask` on [`app.py`](../app.py). Claude system prompt: context-only, refuse when not confident. Ensure the index has chunks (run worker after upload).
 
 **To deploy to EC2:**
-1. Fix hardcoded paths in `app.py` → env vars
-2. Fill `.env` with real AWS values — set **`OS_HOST`** to the **hostname only** (strip `https://`) from `batch-get-collection` → `collectionEndpoint` (wrong host → OpenSearch **403**)
-3. Copy `systemd/*.service` to `/etc/systemd/system/`, `daemon-reload`
-4. `systemctl enable --now rag-api rag-worker@1 rag-worker@2 rag-worker@3`
+1. Clone repo, `.venv`, `pip install -r requirements.txt`; optional: rsync **`data/`** if you want the local dashboard populated.
+2. Fill `.env` — **`OS_HOST`** = hostname only from `batch-get-collection` → `collectionEndpoint` (strip `https://`; wrong host → **403**).
+3. Copy `systemd/*.service` to `/etc/systemd/system/`, `daemon-reload`; adjust `WorkingDirectory` / `EnvironmentFile` if not using `/home/ubuntu/immigration-rag`.
+4. `systemctl enable --now rag-api rag-worker@1 rag-worker@2 rag-worker@3` · nginx `proxy_pass` to `127.0.0.1:5000` as needed.

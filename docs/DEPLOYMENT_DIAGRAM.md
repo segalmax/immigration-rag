@@ -34,7 +34,7 @@ flowchart TD
         end
     end
 
-    Browser -->|"HTTPS"| nginx
+    Browser -->|"HTTP :80 (HTTPS optional)"| nginx
 ```
 
 ## 2 — AWS Service Calls
@@ -50,7 +50,7 @@ Which process calls which AWS API, and why.
 | worker | SQS | `ReceiveMessage` / `DeleteMessage` | Poll for new file events |
 | worker | S3 | `GetObject` | Download the uploaded `.md` file |
 | worker | Bedrock Titan | `InvokeModel` | Embed each chunk |
-| worker | OpenSearch | `bulk _doc` | Index chunks into k-NN index |
+| worker | OpenSearch | `POST /{index}/_doc` | One HTTP request per chunk ([`send_doc_to_opensearch`](../src/opensearch_utils.py)), not the Bulk API |
 | S3 (auto) | → SQS | `ObjectCreated` event | Trigger worker after browser upload |
 
 ## 3 — Ingest Chain (one-time data load)
@@ -71,7 +71,7 @@ flowchart LR
     script -->|"PUT"| S3
     S3 -->|"ObjectCreated event"| SQS
     SQS -->|"ReceiveMessage"| worker
-    worker -->|"embed + bulk index"| OS
+    worker -->|"embed + POST _doc ×N"| OS
 ```
 
 ---

@@ -63,7 +63,7 @@ alwaysApply: true
 - **Two upload tracks:** USCIS (category=uscis, S3 key from H1/H2 headers, rich metadata) · Other (category=other, flat `uploads/` prefix, minimal metadata).
 - **SQS trigger:** S3 `ObjectCreated` event sends the uploaded object to SQS after browser PUT completes.
 - **Chunking:** `MarkdownHeaderTextSplitter` first (section_path metadata per chunk) → `RecursiveCharacterTextSplitter` only for chunks >2000 chars.
-- **OpenSearch chunk fields (ingest):** worker documents include `s3_key`, `category`, `volume`, `part`, `chapter`, `source_url`, `section_path`, `text`, `chunk_index`, `vector`. [`opensearch/index_schema.json`](opensearch/index_schema.json) still declares `chunk_id` — align names with the worker before treating the mapping as canonical.
+- **OpenSearch chunk fields (ingest):** [`worker.py`](worker.py) `build_doc` sends `s3_key`, `category`, `volume`, `part`, `chapter`, `source_url`, `section_path`, `text`, `chunk_index`, `vector` (indexed via **POST** `/_doc` per chunk in [`src/opensearch_utils.py`](src/opensearch_utils.py)). [`opensearch/index_schema.json`](opensearch/index_schema.json) also lists `chunk_id` / `doc_id` / `source_s3_key` — worker does **not** set those today; align or ignore until needed.
 - **S3 CORS:** must `put_bucket_cors` (AllowedMethods: PUT/GET/HEAD, AllowedOrigins: *) before browser presigned-URL uploads work.
 
 ---

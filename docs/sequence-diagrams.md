@@ -55,7 +55,7 @@ sequenceDiagram
 
 **Local corpus** — routes `/`, `/browse`, `/content/*`, `/search`: read [`data/uscis_policy_manual_clean/`](../data/) via `load_corpus()` (in-memory `_cache`). Search is **substring scan** in Python over loaded file text, not OpenSearch.
 
-**S3 mirror** — routes `/s3/`, `/s3/browse`, `/s3/content/*`, `/s3/search`: `load_s3_corpus()` does `ListObjectsV2` + **`GetObject` per `.md`** into a cached DataFrame (same in-memory search as local). **No OpenSearch** on these paths today.
+**S3 mirror** — routes `/s3/`, `/s3/browse`, `/s3/content/*`, `/s3/search`: `load_s3_corpus()` does `ListObjectsV2` + **`GetObject` per `.md`** into **`_s3_cache`** (filled once per process under a lock). **No OpenSearch** on these paths. Production **`rag-api.service`** uses gunicorn **`--workers 1`** so every request shares one cache (multiple workers ⇒ inconsistent sidebar counts).
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#4f46e5', 'primaryTextColor': '#fff', 'primaryBorderColor': '#3730a3', 'secondaryColor': '#0891b2', 'secondaryTextColor': '#fff', 'tertiaryColor': '#059669', 'tertiaryTextColor': '#fff', 'lineColor': '#6b7280', 'textColor': '#111827', 'noteBkgColor': '#fef9c3', 'noteTextColor': '#713f12', 'activationBkgColor': '#e0e7ff', 'activationBorderColor': '#4f46e5', 'loopTextColor': '#4f46e5', 'labelBoxBkgColor': '#f0fdf4', 'labelBoxBorderColor': '#059669', 'labelTextColor': '#065f46'}}}%%
