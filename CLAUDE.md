@@ -74,7 +74,7 @@ RAG pipeline on USCIS Policy Manual (446 clean `.md` files). `app.py` is the mai
 
 **Stack**: Flask · Tailwind CDN · Tabulator.js · Plotly · Bedrock (Titan + Claude) · OpenSearch Serverless · S3 · SQS · EC2 · systemd
 
-**Structure**: `scripts/` → one-off data tools · `app.py` + `worker.py` → main runtimes · `src/` → shared chunk + AWS clients · `kb_dashboard/templates/` → Flask templates · `opensearch/` → index schema · `systemd/` → `rag-api.service` + `rag-worker@.service` (3 instances on EC2)
+**Structure**: `scripts/` → one-off data tools · `app.py` + `worker.py` → main runtimes · `src/` → shared chunk + AWS clients · `kb_dashboard/templates/` → Flask templates · `opensearch/` → index schema · `systemd/` → `rag-api.service` (gunicorn **`--workers 1`** — one in-memory `_s3_cache`) + `rag-worker@.service` (3 instances on EC2)
 
 For detailed architecture, see [docs/CODEBASE_MAP.md](docs/CODEBASE_MAP.md).
 
@@ -83,6 +83,6 @@ For detailed architecture, see [docs/CODEBASE_MAP.md](docs/CODEBASE_MAP.md).
 ## Open Issues
 - **Footnote gap:** `clean_kb.py` misses `[^ n]` / bare `[n]` — 4 files still noisy. Awaiting fix instruction.
 - **Token counts approximate:** `tiktoken cl100k_base` ≠ Titan tokenizer. Good enough proxy for now.
-- **Hardcoded paths** in `app.py` — must switch to env vars before EC2 deploy.
+- **Local corpus paths** in `app.py` — under repo `data/`; if missing on EC2, `/` is empty-state + banner (use `/s3/` or rsync `data/`). Env-based roots only if you mount corpus elsewhere.
 - **`PORT` env** — `app.py` requires `os.environ["PORT"]` (no default); set in `.env` or shell.
 - **OpenSearch index** needs recreating with new schema before first worker run (`python scripts/create_index.py`).

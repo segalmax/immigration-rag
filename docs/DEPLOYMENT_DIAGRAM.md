@@ -105,7 +105,7 @@ journalctl -u rag-worker@1 -f      # one instance only
 | Line | Why |
 |------|-----|
 | `EnvironmentFile=.../.env` | All `os.environ["..."]` in app.py/src/ read from here. Missing var → KeyError crash. |
-| `gunicorn app:app --bind 0.0.0.0:5000 --workers 2` | Replaces `python app.py`. 2 parallel Flask processes, each serves 1 request at a time. `app:app` = "the `app` object in `app.py`". |
+| `gunicorn app:app --bind 0.0.0.0:5000 --workers 1` | Replaces `python app.py`. **One worker process** so `app.py`’s in-memory `_s3_cache` is not split across processes (multiple workers caused inconsistent `/s3/browse`). `app:app` = the `app` object in `app.py`. |
 | `Restart=always` | Auto-relaunch after crash, 5s delay. |
 
 **`rag-worker@.service` (template — 3 instances):**

@@ -68,6 +68,8 @@ tests/
 PORT, AWS_REGION, S3_BUCKET, SQS_QUEUE_URL, OS_HOST, OS_INDEX, CLAUDE_MODEL_ID, TITAN_EMBED_MODEL
 ```
 
+`OS_HOST` must be the OpenSearch Serverless **hostname only** (from `batch-get-collection` → `collectionEndpoint`, remove `https://`). Mismatched host yields **403** on index HTTP.
+
 (Optional: `APP_RELOADER=0` to disable Flask reloader when debugging.)
 
 ---
