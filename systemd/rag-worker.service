@@ -3,10 +3,10 @@ Description=Immigration RAG — SQS Worker
 After=network.target
 
 [Service]
-User=ec2-user
-WorkingDirectory=/home/ec2-user/immigration-rag-claud-code-folder
-EnvironmentFile=/home/ec2-user/immigration-rag-claud-code-folder/.env
-ExecStart=/home/ec2-user/immigration-rag-claud-code-folder/.venv/bin/python worker.py
+User=ubuntu
+WorkingDirectory=/home/ubuntu/immigration-rag
+EnvironmentFile=/home/ubuntu/immigration-rag/.env
+ExecStart=/home/ubuntu/immigration-rag/.venv/bin/python worker.py
 Restart=always
 RestartSec=5
 
