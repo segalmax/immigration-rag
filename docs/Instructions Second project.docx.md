@@ -113,7 +113,7 @@ Install deps, set env, run worker + app, test with curl.
 
 ## 10) Systemd
 
-`rag-api.service`, `rag-worker.service`
+`rag-api.service`, `rag-worker@.service` (instances `@1`–`@3`)
 
 ---
 

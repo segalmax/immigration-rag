@@ -74,7 +74,7 @@ RAG pipeline on USCIS Policy Manual (446 clean `.md` files). `app.py` is the mai
 
 **Stack**: Flask · Tailwind CDN · Tabulator.js · Plotly · Bedrock (Titan + Claude) · OpenSearch Serverless · S3 · SQS · EC2 · systemd
 
-**Structure**: `scripts/` → one-off data tools · `app.py` + `worker.py` → main runtimes · `src/` → shared chunk + AWS clients · `kb_dashboard/templates/` → Flask templates · `opensearch/` → index schema · `systemd/` → empty EC2 deployment placeholders
+**Structure**: `scripts/` → one-off data tools · `app.py` + `worker.py` → main runtimes · `src/` → shared chunk + AWS clients · `kb_dashboard/templates/` → Flask templates · `opensearch/` → index schema · `systemd/` → `rag-api.service` + `rag-worker@.service` (3 instances on EC2)
 
 For detailed architecture, see [docs/CODEBASE_MAP.md](docs/CODEBASE_MAP.md).
 

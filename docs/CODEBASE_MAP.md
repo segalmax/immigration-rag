@@ -100,9 +100,8 @@ flowchart TD
 
 **Deployment Status**
 
-- `systemd/rag-api.service` is intentionally empty for now.
-- `systemd/rag-worker.service` is intentionally empty for now.
-- Both files need to be rewritten later when the real EC2 layout, command lines, and env locations are finalized.
+- `systemd/rag-api.service` — gunicorn + Flask (see [DEPLOYMENT_DIAGRAM.md](DEPLOYMENT_DIAGRAM.md)).
+- `systemd/rag-worker@.service` — template for **three** SQS worker processes (`rag-worker@1` … `@3`); same `worker.py`, parallel queue consumers.
 
 ---
 
@@ -150,8 +149,8 @@ immigration-rag-claud-code-folder/
 │   └── launch.json               # Debug: Flask app + worker
 │
 ├── systemd/
-│   ├── rag-api.service           # Empty placeholder until EC2 deployment layout is finalized
-│   └── rag-worker.service        # Empty placeholder until EC2 deployment layout is finalized
+│   ├── rag-api.service           # gunicorn app:app on :5000
+│   └── rag-worker@.service       # template: enable rag-worker@1 @2 @3 (three worker.py processes)
 │
 ├── tests/
 │   └── test_kb.py                # pytest — tests root app helpers and routes
@@ -308,12 +307,12 @@ python scripts/create_index.py
 
 **To debug the SQS worker:**
 → Run `worker.py` and make sure the queue contains only S3 `ObjectCreated` event messages
-→ Run **only one** `worker.py` process per queue (a stray background worker + the debugger will compete: one looks idle while the other processes messages)
+→ For **local debugging**, run a **single** `worker.py` (a stray second process + debugger both poll the same queue and confuse you). On **EC2**, three `rag-worker@N` instances are fine — SQS visibility timeout keeps one message with one consumer at a time.
 
 **RAG query:** [`src/bedrock_utils.py`](../src/bedrock_utils.py) (`run_ask`); `POST /ask` on [`app.py`](../app.py). Claude system prompt: context-only, refuse when not confident. Ensure the index has chunks (run worker after upload).
 
 **To deploy to EC2:**
 1. Fix hardcoded paths in `app.py` → env vars
 2. Fill `.env` with real AWS values
-3. Rewrite the empty `systemd/` service files for the real deployment layout
-4. `systemctl enable rag-api rag-worker && systemctl start rag-api rag-worker`
+3. Copy `systemd/*.service` to `/etc/systemd/system/`, `daemon-reload`
+4. `systemctl enable --now rag-api rag-worker@1 rag-worker@2 rag-worker@3`

@@ -27,8 +27,10 @@ flowchart TD
             nginx -->|"proxy_pass"| gunicorn
             gunicorn -->|"WSGI"| flask
         end
-        subgraph rag_worker ["systemd: rag-worker"]
-            worker["worker.py"]:::worker
+        subgraph rag_worker ["systemd: rag-worker@1 to @3"]
+            w1["worker.py"]:::worker
+            w2["worker.py"]:::worker
+            w3["worker.py"]:::worker
         end
     end
 
@@ -93,8 +95,9 @@ The ingest pipeline is identical to the browser upload flow — no separate tool
 **What it does:** starts gunicorn + worker at EC2 boot, restarts on crash, injects `.env` vars, logs via `journalctl`.
 
 ```bash
-journalctl -u rag-api -f      # tail Flask/gunicorn logs
-journalctl -u rag-worker -f   # tail worker logs
+journalctl -u rag-api -f           # tail Flask/gunicorn logs
+journalctl -u 'rag-worker@*' -f    # all three SQS worker instances
+journalctl -u rag-worker@1 -f      # one instance only
 ```
 
 **`rag-api.service` critical lines:**
@@ -105,9 +108,12 @@ journalctl -u rag-worker -f   # tail worker logs
 | `gunicorn app:app --bind 0.0.0.0:5000 --workers 2` | Replaces `python app.py`. 2 parallel Flask processes, each serves 1 request at a time. `app:app` = "the `app` object in `app.py`". |
 | `Restart=always` | Auto-relaunch after crash, 5s delay. |
 
-**`rag-worker.service` critical lines:**
+**`rag-worker@.service` (template — 3 instances):**
 
 | Line | Why |
 |------|-----|
-| `python worker.py` | No gunicorn — worker is an infinite SQS poll loop, not a web server. |
-| `Restart=always` | If one bad message crashes the worker, the queue silently stops draining without this. |
+| `Description=... (%i)` | `%i` is the instance id (`1`, `2`, `3`) — same unit file, three OS processes. |
+| `python worker.py` | No gunicorn — each process is an infinite SQS poll loop. |
+| `Restart=always` | If a process crashes, that instance relaunches so its share of the queue keeps draining. |
+
+Enable on EC2: `sudo systemctl enable --now rag-worker@1 rag-worker@2 rag-worker@3` (after `cp` + `daemon-reload`). Three processes share one SQS queue; visibility timeout prevents the same message being processed twice at once.

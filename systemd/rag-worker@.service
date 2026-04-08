@@ -1,5 +1,5 @@
 [Unit]
-Description=Immigration RAG — SQS Worker
+Description=Immigration RAG — SQS Worker (%i)
 After=network.target
 
 [Service]
