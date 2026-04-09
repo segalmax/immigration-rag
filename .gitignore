@@ -1,5 +1,6 @@
 .env
 .cursor/debug*.log
+.playwright-mcp/
 __pycache__/
 *.pyc
 *.pyo
@@ -17,3 +18,7 @@ uscis_policy_manual_clean/
 logs/
 scratch.txt
 opensearch/data/
+evaluation/last_run_retrieval.json
+evaluation/last_run_answer.json
+data/visualizations/*.html
+data/visualizations/*.json

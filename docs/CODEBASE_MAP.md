@@ -76,6 +76,7 @@ flowchart TD
 | | `worker.py` | ✅ Done |
 | | `app.py` (`/ask` → `src/bedrock_utils.run_ask`) | ✅ RAG query path |
 | | `src/bedrock_utils.py` | ✅ Titan body, `GET /_mapping` cache, Claude, `run_ask` |
+| **Eval** | `evaluation/eval.py` + `evaluation/tests.jsonl` | ✅ Offline MRR/NDCG + optional Claude answer + JSON judge (`python -m evaluation.eval --help`); see `evaluation/SEQUENCE.md` |
 
 ---
 
@@ -91,6 +92,7 @@ flowchart TD
 - OpenSearch index creation works through `scripts/create_index.py`.
 - [`.vscode/launch.json`](../.vscode/launch.json) exists for app and worker debugging.
 - `POST /ask` returns grounded answers (Titan embed → OpenSearch k-NN → Claude).
+- `python -m evaluation.eval` runs retrieval/answer metrics against `evaluation/tests.jsonl` (same AWS env as `/ask`).
 
 **Operational gaps (not blockers)**
 
@@ -99,7 +101,7 @@ flowchart TD
 
 **Deployment (reference)**
 
-- `systemd/rag-api.service` — gunicorn **`--workers 1`** + Flask (see [DEPLOYMENT_DIAGRAM.md](DEPLOYMENT_DIAGRAM.md)); paths target `/home/ubuntu/immigration-rag` — adjust if your clone dir differs.
+- `systemd/rag-api.service` — gunicorn **`--workers 1`** + Flask (see [DEPLOYMENT_DIAGRAM.md](DEPLOYMENT_DIAGRAM.md)); paths target `/home/ubuntu/immigration-rag` — adjust if your clone dir differs. Both units set **`PYTHONUNBUFFERED=1`** so `journalctl` shows Python output promptly.
 - `systemd/rag-worker@.service` — template for **three** SQS worker processes (`rag-worker@1` … `@3`); same `worker.py`, parallel queue consumers.
 
 ---
@@ -223,6 +225,8 @@ uscis_policy_manual.html
 **`analyze_kb.py`**: Generates `reports/kb_report.md` with word/token distributions, oversized files (≥8000 words), footnote density. Reads the **raw** corpus.
 
 **`create_index.py`**: One-time OpenSearch Serverless index creation. Reads `opensearch/index_schema.json`, resolves the live collection endpoint from AWS, and is safe to re-run (ignores `resource_already_exists_exception`).
+
+**`plot_opensearch_embeddings_3d.py`**: Pages the live index with **`search_after`** (not scroll — OpenSearch Serverless returns 404 on `/_search/scroll`) for `vector` + chunk metadata, reduces with **UMAP + PCA** to 3D (same idea as closed-book-copilot `visualize/plot_embeddings.py`), writes Plotly HTML to `data/visualizations/embeddings_3d_latest.html` (timestamped copies too). The Flask app serves it at **`/embeddings-3d`** (iframe). Use `--no-umap` for PCA-only if `umap-learn` is not installed.
 
 ---
 

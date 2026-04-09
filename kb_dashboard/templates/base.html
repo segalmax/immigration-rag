@@ -59,6 +59,10 @@
                             {% if request.path == '/ask' %}!text-white underline underline-offset-4{% endif %}">
         Ask
       </a>
+      <a href="/embeddings-3d" class="text-indigo-200 hover:text-white text-sm font-medium transition
+                            {% if request.path.startswith('/embeddings-3d') %}!text-white underline underline-offset-4{% endif %}">
+        Embeddings 3D
+      </a>
 
       <span class="text-indigo-500 opacity-40 select-none">|</span>
 

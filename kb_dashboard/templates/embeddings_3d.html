@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Embeddings 3D – USCIS KB{% endblock %}
+
+{% block content %}
+<div class="max-w-screen-xl mx-auto px-6 py-8 space-y-4">
+  <h1 class="text-2xl font-bold text-gray-900">OpenSearch chunk embeddings (3D)</h1>
+  <p class="text-sm text-gray-600">
+    Same idea as closed-book-copilot <code class="bg-gray-100 px-1 rounded">visualize/plot_embeddings.py</code>:
+    sample stored vectors, UMAP (optional) + PCA to 3D, Plotly <code class="bg-gray-100 px-1 rounded">scatter_3d</code>.
+    Points are colored by <strong>volume</strong> (dashboard-style labels, Vol 1 – …) by default.
+  </p>
+
+  {% if has_plot %}
+  <p class="text-sm text-green-700 font-medium">Showing <code class="bg-green-50 px-1 rounded">data/visualizations/embeddings_3d_latest.html</code></p>
+  <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden" style="height: 78vh;">
+    <iframe title="Embeddings 3D" src="/embeddings-3d/plot.html" class="w-full h-full border-0"></iframe>
+  </div>
+  {% else %}
+  <div class="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900 space-y-2">
+    <p class="font-semibold">No visualization generated yet.</p>
+    <p>From the repo root (with AWS / OpenSearch env loaded):</p>
+    <pre class="bg-white border border-amber-200 rounded p-3 text-xs overflow-x-auto">python scripts/plot_opensearch_embeddings_3d.py</pre>
+    <p class="text-xs text-amber-800">Then reload this page. Default colors by <strong>volume</strong>; use <code>--color-by category</code> to switch. Other flags: <code>--max-chunks</code>, <code>--no-umap</code>.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

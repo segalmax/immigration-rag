@@ -22,6 +22,7 @@ APP_ROOT = Path(__file__).parent
 RAW_ROOT = APP_ROOT / "data" / "uscis_policy_manual"
 CLEAN_ROOT = APP_ROOT / "data" / "uscis_policy_manual_clean"
 TEMPLATE_ROOT = APP_ROOT / "kb_dashboard" / "templates"
+EMBEDDINGS_3D_HTML = APP_ROOT / "data" / "visualizations" / "embeddings_3d_latest.html"
 
 app = flask.Flask(__name__, template_folder=str(TEMPLATE_ROOT))
 
@@ -487,6 +488,22 @@ def load_s3_corpus() -> dict:
 @app.route("/health")
 def health():
     return flask.jsonify({"status": "ok"})
+
+
+@app.route("/embeddings-3d")
+def embeddings_3d():
+    return flask.render_template("embeddings_3d.html", has_plot=EMBEDDINGS_3D_HTML.is_file())
+
+
+@app.route("/embeddings-3d/plot.html")
+def embeddings_3d_plot():
+    if not EMBEDDINGS_3D_HTML.is_file():
+        return (
+            "No plot yet. Run: python scripts/plot_opensearch_embeddings_3d.py\n",
+            404,
+            {"Content-Type": "text/plain; charset=utf-8"},
+        )
+    return flask.send_file(EMBEDDINGS_3D_HTML, mimetype="text/html")
 
 
 @app.route("/ask", methods=["GET", "POST"])

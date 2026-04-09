@@ -105,6 +105,7 @@ journalctl -u rag-worker@1 -f      # one instance only
 | Line | Why |
 |------|-----|
 | `EnvironmentFile=.../.env` | All `os.environ["..."]` in app.py/src/ read from here. Missing var → KeyError crash. |
+| `Environment=PYTHONUNBUFFERED=1` | Line-buffer `print` / Flask logs to journald immediately (default block-buffer hides worker output for a long time). |
 | `gunicorn app:app --bind 0.0.0.0:5000 --workers 1` | Replaces `python app.py`. **One worker process** so `app.py`’s in-memory `_s3_cache` is not split across processes (multiple workers caused inconsistent `/s3/browse`). `app:app` = the `app` object in `app.py`. |
 | `Restart=always` | Auto-relaunch after crash, 5s delay. |
 
@@ -113,6 +114,7 @@ journalctl -u rag-worker@1 -f      # one instance only
 | Line | Why |
 |------|-----|
 | `Description=... (%i)` | `%i` is the instance id (`1`, `2`, `3`) — same unit file, three OS processes. |
+| `Environment=PYTHONUNBUFFERED=1` | Same as API — `Processing …` lines show up in `journalctl` right away. |
 | `python worker.py` | No gunicorn — each process is an infinite SQS poll loop. |
 | `Restart=always` | If a process crashes, that instance relaunches so its share of the queue keeps draining. |
 

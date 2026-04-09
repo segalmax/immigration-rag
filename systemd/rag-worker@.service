@@ -6,6 +6,7 @@ After=network.target
 User=ubuntu
 WorkingDirectory=/home/ubuntu/immigration-rag
 EnvironmentFile=/home/ubuntu/immigration-rag/.env
+Environment=PYTHONUNBUFFERED=1
 ExecStart=/home/ubuntu/immigration-rag/.venv/bin/python worker.py
 Restart=always
 RestartSec=5

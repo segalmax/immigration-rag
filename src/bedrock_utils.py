@@ -3,8 +3,12 @@ Bedrock Runtime (Titan + Claude), Titan/OpenSearch vector spec from live _mappin
 """
 import json
 import os
+import random
+import time
 
 import boto3
+import botocore.config
+import botocore.exceptions
 import requests
 import src.opensearch_utils
 
@@ -23,7 +27,39 @@ EXPECTED_KNN_SPACE_TYPE = "innerproduct"
 
 _cached_dimension: int | None = None
 
-BEDROCK_RUNTIME = boto3.client("bedrock-runtime", region_name=REGION)
+# Adaptive retries + long read for big Claude payloads; 503 "ServiceUnavailable" is documented as throttling-related.
+_BEDROCK_BOTOCORE_CONFIG = botocore.config.Config(
+    retries={"max_attempts": 12, "mode": "adaptive"},
+    connect_timeout=60,
+    read_timeout=600,
+)
+BEDROCK_RUNTIME = boto3.client("bedrock-runtime", region_name=REGION, config=_BEDROCK_BOTOCORE_CONFIG)
+
+# After SDK adaptive retries exhaust, extra rounds with backoff+jitter (AWS doc: 503 needs backoff).
+_BEDROCK_APP_RETRYABLE = frozenset({"ServiceUnavailableException", "ThrottlingException", "TooManyRequestsException"})
+_BEDROCK_APP_EXTRA_ROUNDS = 8
+_BEDROCK_APP_BASE_SLEEP_SEC = 2.5
+
+
+def _invoke_model_json_body(model_id: str, body: str) -> dict:
+    for round_idx in range(_BEDROCK_APP_EXTRA_ROUNDS):
+        try:
+            response = BEDROCK_RUNTIME.invoke_model(
+                body=body,
+                modelId=model_id,
+                contentType="application/json",
+                accept="application/json",
+            )
+            raw = response["body"].read()
+            return json.loads(raw)
+        except botocore.exceptions.ClientError as exc:
+            code = exc.response.get("Error", {}).get("Code", "")
+            if code not in _BEDROCK_APP_RETRYABLE:
+                raise
+            if round_idx >= _BEDROCK_APP_EXTRA_ROUNDS - 1:
+                raise
+            delay = _BEDROCK_APP_BASE_SLEEP_SEC * (2**round_idx) + random.uniform(0, 2.0)
+            time.sleep(delay)
 
 
 def _vector_field_props_from_mapping(mapping_response: dict) -> dict:
@@ -78,24 +114,13 @@ def ensure_opensearch_vector_spec_loaded() -> None:
 def embed_text_for_titan(text: str) -> list:
     ensure_opensearch_vector_spec_loaded()
     body = titan_embed_invoke_body_json(text)
-    response = BEDROCK_RUNTIME.invoke_model(
-        body=body,
-        modelId=TITAN_EMBED_MODEL,
-        contentType="application/json",
-        accept="application/json",
-    )
-    return json.loads(response["body"].read())["embedding"]
+    data = _invoke_model_json_body(TITAN_EMBED_MODEL, body)
+    return data["embedding"]
 
 
 def invoke_claude(body: str, model_id: str | None = None) -> dict:
     mid = model_id or CLAUDE_MODEL_ID
-    response = BEDROCK_RUNTIME.invoke_model(
-        body=body,
-        modelId=mid,
-        contentType="application/json",
-        accept="application/json",
-    )
-    return json.loads(response["body"].read())
+    return _invoke_model_json_body(mid, body)
 
 
 def knn_search_top_chunks(query_vector: list, k: int, category_filter: str | None = None) -> list[dict]:
